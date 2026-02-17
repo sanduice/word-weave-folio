@@ -27,7 +27,7 @@ export function TopBar() {
   };
 
   return (
-    <header className="flex items-center h-12 px-4 border-b border-border bg-background shrink-0">
+    <header className="flex items-center h-12 px-4 border-b border-border bg-background shrink-0 sticky top-0 z-30">
       <SidebarTrigger className="mr-3" />
 
       {/* Breadcrumb */}
