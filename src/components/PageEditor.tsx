@@ -7,8 +7,18 @@ import TaskItem from "@tiptap/extension-task-item";
 import LinkExtension from "@tiptap/extension-link";
 import { usePage, useUpdatePage, useTrackPageOpen, useBacklinks } from "@/hooks/use-pages";
 import { useAppStore } from "@/stores/app-store";
-import { Input } from "@/components/ui/input";
 import { FileText, Link2 } from "lucide-react";
+import { SlashCommandExtension } from "./editor/slash-command";
+import { SlashCommandMenu } from "./editor/SlashCommandMenu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 export function PageEditor() {
   const { selectedPageId, setSelectedPageId, selectedSpaceId } = useAppStore();
@@ -21,6 +31,8 @@ export function PageEditor() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const lastSavedContent = useRef<string>("");
   const lastSavedTitle = useRef<string>("");
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
 
   const editor = useEditor({
     extensions: [
@@ -31,11 +43,21 @@ export function PageEditor() {
       TaskList,
       TaskItem.configure({ nested: true }),
       LinkExtension.configure({ openOnClick: true }),
+      SlashCommandExtension,
     ],
     content: "",
     editorProps: {
       attributes: {
         class: "prose prose-sm max-w-none focus:outline-none min-h-[60vh] px-0 py-2",
+      },
+      handleKeyDown: (_view, event) => {
+        // Cmd+` for inline code
+        if ((event.metaKey || event.ctrlKey) && event.key === "`") {
+          event.preventDefault();
+          editor?.chain().focus().toggleCode().run();
+          return true;
+        }
+        return false;
       },
     },
     onUpdate: ({ editor }) => {
@@ -91,29 +113,35 @@ export function PageEditor() {
     scheduleSave(newTitle, editor?.getHTML() || "");
   };
 
-  // Slash commands
-  useEffect(() => {
-    if (!editor) return;
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't intercept if we're not focused on the editor
-      if (!editor.isFocused) return;
-    };
-
-    return () => {};
-  }, [editor]);
-
-  // Keyboard shortcut for search
+  // Keyboard shortcut for search + link dialog
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        useAppStore.getState().setSearchOpen(true);
+        // If editor is focused, open link dialog
+        if (editor?.isFocused) {
+          const existingUrl = editor.getAttributes("link").href || "";
+          setLinkUrl(existingUrl);
+          setLinkDialogOpen(true);
+        } else {
+          useAppStore.getState().setSearchOpen(true);
+        }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [editor]);
+
+  const applyLink = () => {
+    if (!editor) return;
+    if (linkUrl) {
+      editor.chain().focus().setLink({ href: linkUrl }).run();
+    } else {
+      editor.chain().focus().unsetLink().run();
+    }
+    setLinkDialogOpen(false);
+    setLinkUrl("");
+  };
 
   if (!selectedPageId) {
     return (
@@ -137,7 +165,7 @@ export function PageEditor() {
 
   return (
     <div className="flex-1 overflow-auto">
-      <div className="max-w-3xl mx-auto px-6 py-8">
+      <div className="max-w-3xl mx-auto px-6 py-8 relative">
         {/* Save status */}
         <div className="flex justify-end mb-2">
           <span className="text-[11px] text-muted-foreground/60">
@@ -155,6 +183,29 @@ export function PageEditor() {
 
         {/* Editor */}
         <EditorContent editor={editor} />
+
+        {/* Slash command menu */}
+        {editor && <SlashCommandMenu editor={editor} />}
+
+        {/* Link dialog */}
+        <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Insert Link</DialogTitle>
+            </DialogHeader>
+            <Input
+              value={linkUrl}
+              onChange={(e) => setLinkUrl(e.target.value)}
+              placeholder="https://..."
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } }}
+              autoFocus
+            />
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
+              <Button onClick={applyLink}>Apply</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Backlinks */}
         {backlinks && backlinks.length > 0 && (
