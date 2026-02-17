@@ -1,105 +1,74 @@
 
 
-# Notespace — Personal Knowledge Base
+# Markdown Editor with Slash Commands & Keyboard Shortcuts
 
-## Overview
-A lightweight, single-user knowledge base for writing, organizing, linking, and finding information fast. Markdown-first, zero friction, inspired by Confluence but without the bloat.
+## What Changes
 
----
+Upgrade the existing TipTap editor with three major capabilities:
 
-## Phase 1: Foundation & Data Layer (Lovable Cloud)
+1. **Slash command menu** -- typing `/` opens a filterable popup with block types (headings, lists, code, quote, divider, image)
+2. **Markdown input rules** -- typing markdown shortcuts like `#`, `-`, `1.`, `>`, ``` at the start of a line auto-converts to the correct block (TipTap StarterKit already handles most of these, but we'll verify all are active)
+3. **Keyboard shortcuts** -- Ctrl/Cmd+B (bold), Ctrl/Cmd+I (italic), Ctrl/Cmd+\` (inline code), Ctrl/Cmd+K (link insertion dialog)
 
-### Database Setup
-- **Spaces table**: id, name, icon (emoji), description, created_at
-- **Pages table**: id, space_id, title, content (markdown), parent_id (nullable for hierarchy), is_favorite, created_at, updated_at
-- **Page Links table**: from_page_id, to_page_id (for backlink tracking)
-
-### Seed Data
-- Create a default "Personal" space with a welcome page
+No database changes needed -- content is already stored as HTML from TipTap (which preserves markdown structure).
 
 ---
 
-## Phase 2: Navigation Shell
+## Technical Approach
 
-### Left Sidebar
-- App name/logo at top
-- **Space selector** dropdown to switch between spaces
-- **Page tree** showing hierarchical pages for the current space (collapsible, up to 3 levels)
-- **Favorites** section showing starred pages
-- **Recently opened** section (last 10 pages)
-- Collapsible sidebar with mini icon-only mode
+### 1. Slash Command Extension (new file: `src/components/editor/SlashCommandMenu.tsx`)
 
-### Top Bar
-- Current page title
-- Breadcrumb trail (Space > Parent > Page)
-- Search trigger (Cmd+K)
-- "New Page" button
+Build a custom TipTap extension using `@tiptap/suggestion` (already bundled with TipTap v3). This avoids adding any new npm dependencies.
 
----
+- Create a `SlashCommand` extension that listens for `/` typed at the start of a line or after whitespace
+- Render a floating popup (positioned via TipTap's suggestion utilities) with categorized command items
+- Support keyboard navigation (arrow keys, Enter to select, Escape to close)
+- Real-time filtering as the user types after `/`
+- On selection: delete the `/` trigger text, apply the corresponding editor command
 
-## Phase 3: Space Management
+**Menu categories and items:**
+- Basic: Text, Heading 1, Heading 2, Heading 3
+- Formatting: Code Block, Quote, Divider
+- Lists: Bullet List, Numbered List, Checklist
+- Media: Image (inserts `![alt](url)` placeholder)
 
-- Create, rename, delete spaces
-- Pick emoji icon for each space
-- Optional description
-- Switching spaces updates the sidebar page tree
+Each item has: title, description, icon (from lucide-react), search terms, and a command function.
 
----
+### 2. Slash Command Extension Logic (new file: `src/components/editor/slash-command.ts`)
 
-## Phase 4: Page Editor (TipTap + Markdown)
+A TipTap `Extension.create()` that:
+- Uses the `suggestion` utility from `@tiptap/suggestion`
+- Configures the `/` trigger character
+- Filters items based on typed query
+- Delegates rendering to the React component above
+- Does NOT trigger inside code blocks
 
-### Rich Editor
-- TipTap-based editor that stores markdown as source of truth
-- Slash command menu: `/h1`, `/h2`, `/h3`, `/code`, `/quote`, `/checklist`, `/bullet`, `/numbered`
-- Keyboard shortcuts: bold, italic, link insertion
-- Support for headings, lists, code blocks, blockquotes, checklists, images (URL-based for v1)
+### 3. Link Insertion Dialog (enhancement in `PageEditor.tsx`)
 
-### Auto-Save
-- Debounced save every 2-3 seconds after edits
-- Visual "Saved" / "Saving..." indicator
+- Ctrl/Cmd+K opens a small popover/dialog to enter a URL
+- Applies the link to selected text, or inserts a new link
 
-### Page Creation
-- "New Page" button creates an untitled page instantly in the current space
-- Option to set parent page for hierarchy
+### 4. Updated PageEditor
 
----
+- Add the `SlashCommand` extension to the editor's extensions array
+- Add Ctrl/Cmd+\` shortcut for inline code toggle
+- Wire up link dialog for Ctrl/Cmd+K
+- Remove the empty slash command useEffect placeholder (lines 94-104)
 
-## Phase 5: Internal Linking & Backlinks
+### 5. CSS additions
 
-### Wiki-Style Links
-- Typing `[[` triggers an autocomplete dropdown of existing pages
-- Selecting a page inserts a clickable link
-- If the page name doesn't exist, clicking the link creates it
-
-### Backlinks Panel
-- Bottom of each page shows "Referenced in:" with a list of pages that link to the current page
-- Clicking a backlink navigates to that page
-- Link index automatically updated on page save
+- Styles for the slash command popup (positioned absolutely, with hover/selected states, grouped layout)
 
 ---
 
-## Phase 6: Search
+## Files Created / Modified
 
-### Global Search (Cmd+K)
-- Modal search overlay triggered by keyboard shortcut or search icon
-- Searches across page titles and content
-- Instant results as you type
-- Results ranked: title match > heading match > content match
-- Click result to navigate directly to page
+| File | Action |
+|------|--------|
+| `src/components/editor/slash-command.ts` | Create -- TipTap extension using suggestion API |
+| `src/components/editor/SlashCommandMenu.tsx` | Create -- React popup component for the menu |
+| `src/components/PageEditor.tsx` | Modify -- integrate slash extension, add link dialog, add keyboard shortcuts |
+| `src/index.css` | Modify -- add slash menu styles |
 
----
-
-## Phase 7: Favorites & Recents
-
-- Star/unstar pages from the editor or sidebar
-- Track recently opened pages (stored per session/in database)
-- Both sections visible in sidebar for quick access
-
----
-
-## Design Direction
-- Clean, minimal UI with generous whitespace
-- Light mode only for v1 (dark mode in phase 2)
-- Fast transitions, no unnecessary animations
-- Typography-focused — the content is the UI
+No new npm packages needed. `@tiptap/suggestion` ships with TipTap v3 core.
 
