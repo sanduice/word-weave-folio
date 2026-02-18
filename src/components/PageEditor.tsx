@@ -11,6 +11,7 @@ import { FileText, Link2 } from "lucide-react";
 import { SlashCommandExtension } from "./editor/slash-command";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { SlashCommandMenu } from "./editor/SlashCommandMenu";
+import { TableToolbar } from "./editor/TableToolbar";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +31,7 @@ export function PageEditor() {
   const [title, setTitle] = useState("");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const containerRef = useRef<HTMLDivElement>(null);
   const lastSavedContent = useRef<string>("");
   const lastSavedTitle = useRef<string>("");
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
@@ -169,7 +171,7 @@ export function PageEditor() {
   }
 
   return (
-    <div className="flex-1 overflow-auto">
+    <div className="flex-1 overflow-auto" ref={containerRef}>
       <div className="max-w-3xl mx-auto px-6 py-8 relative">
         {/* Save status */}
         <div className="flex justify-end mb-2">
@@ -188,6 +190,9 @@ export function PageEditor() {
 
         {/* Editor */}
         <EditorContent editor={editor} />
+
+        {/* Table toolbar — floats above the active table */}
+        {editor && <TableToolbar editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
 
         {/* Slash command menu */}
         {editor && <SlashCommandMenu editor={editor} />}
