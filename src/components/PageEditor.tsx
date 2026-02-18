@@ -5,6 +5,9 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import LinkExtension from "@tiptap/extension-link";
+import { Color } from "@tiptap/extension-color";
+import { TextStyle } from "@tiptap/extension-text-style";
+import Highlight from "@tiptap/extension-highlight";
 import { usePage, useUpdatePage, useTrackPageOpen, useBacklinks } from "@/hooks/use-pages";
 import { useAppStore } from "@/stores/app-store";
 import { FileText, Link2 } from "lucide-react";
@@ -12,6 +15,7 @@ import { SlashCommandExtension } from "./editor/slash-command";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { SlashCommandMenu } from "./editor/SlashCommandMenu";
 import { TableToolbar } from "./editor/TableToolbar";
+import { BubbleMenuToolbar } from "./editor/BubbleMenuToolbar";
 import {
   Dialog,
   DialogContent,
@@ -41,11 +45,16 @@ export function PageEditor() {
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4, 5, 6] },
+        // StarterKit v3 bundles link — disable so we configure it separately
+        link: false,
       }),
       Placeholder.configure({ placeholder: "Start writing... (use / for commands)" }),
       TaskList,
       TaskItem.configure({ nested: true }),
       LinkExtension.configure({ openOnClick: true }),
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
       SlashCommandExtension,
       Table.configure({ resizable: false }),
       TableRow,
@@ -190,6 +199,17 @@ export function PageEditor() {
 
         {/* Editor */}
         <EditorContent editor={editor} />
+
+        {/* Bubble menu toolbar — appears on text selection */}
+        {editor && (
+          <BubbleMenuToolbar
+            editor={editor}
+            onLinkClick={(existingUrl) => {
+              setLinkUrl(existingUrl);
+              setLinkDialogOpen(true);
+            }}
+          />
+        )}
 
         {/* Table toolbar — floats above the active table */}
         {editor && <TableToolbar editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
