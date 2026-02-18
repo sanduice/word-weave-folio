@@ -4,7 +4,7 @@ import { Editor } from "@tiptap/react";
 import { slashCommandPluginKey, type SlashCommandState } from "./slash-command";
 import {
   Type, Heading1, Heading2, Heading3, Heading4, Heading5, Heading6,
-  Code, Quote, Minus, List, ListOrdered, CheckSquare, Image,
+  Code, Quote, Minus, List, ListOrdered, CheckSquare, Image, Table2,
 } from "lucide-react";
 
 interface CommandItem {
@@ -47,6 +47,10 @@ const COMMANDS: CommandItem[] = [
     icon: <Image className="h-4 w-4" />, command: (e) => {
       const url = window.prompt("Enter image URL:");
       if (url) e.chain().focus().insertContent(`<img src="${url}" alt="image" />`).run();
+    }},
+  { title: "Table", description: "Insert a table", searchTerms: ["table", "grid", "rows", "columns"], category: "Media",
+    icon: <Table2 className="h-4 w-4" />, command: (e) => {
+      e.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
     }},
 ];
 
