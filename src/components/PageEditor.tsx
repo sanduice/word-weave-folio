@@ -9,6 +9,7 @@ import { usePage, useUpdatePage, useTrackPageOpen, useBacklinks } from "@/hooks/
 import { useAppStore } from "@/stores/app-store";
 import { FileText, Link2 } from "lucide-react";
 import { SlashCommandExtension } from "./editor/slash-command";
+import { TableKit } from "@tiptap/extension-table";
 import { SlashCommandMenu } from "./editor/SlashCommandMenu";
 import {
   Dialog,
@@ -44,6 +45,7 @@ export function PageEditor() {
       TaskItem.configure({ nested: true }),
       LinkExtension.configure({ openOnClick: true }),
       SlashCommandExtension,
+      TableKit,
     ],
     content: "",
     editorProps: {
