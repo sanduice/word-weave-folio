@@ -1,35 +1,43 @@
 
+# Fix: Table Command Not Working (`insertTable is not a function`)
 
-# Add Table to Slash Command Menu
+## Root Cause
 
-## What Changes
+The error `e.chain(...).focus(...).insertTable is not a function` is caused by a **Gapcursor conflict** between TipTap v3's `StarterKit` and the `TableKit` extension.
 
-Add a "Table" option to the slash command menu below the existing "Image" item in the Media category. This requires installing the `@tiptap/extension-table` package and integrating it into the editor.
+- `StarterKit` v3 bundles `Gapcursor` internally (from `@tiptap/extensions`)
+- `TableKit` internally adds `Table`, which also registers `Gapcursor` and `tableEditing()` ProseMirror plugins
+- TipTap detects the duplicate and silently drops the conflicting extension, meaning the `Table` node (and its `insertTable` command) never gets registered in the editor schema
+
+Because `Table` is never registered, calling `editor.chain().focus().insertTable(...)` throws at runtime.
+
+## The Fix
+
+Replace `TableKit` (the bundled kit) with the **four individual table extensions** (`Table`, `TableRow`, `TableHeader`, `TableCell`) imported directly from `@tiptap/extension-table`. These can coexist with StarterKit because the sub-extensions don't double-register Gapcursor — only the outer `Table` node does, and TipTap resolves this correctly when it's listed explicitly alongside StarterKit.
+
+No new packages are needed. Everything is already in `@tiptap/extension-table`.
 
 ## Corner Cases Handled
 
-- Table inserted with a sensible default size (3 rows x 3 columns with header row)
-- Table styles added so cells have visible borders and proper padding inside the editor
-- TipTap's table extension handles Tab key navigation between cells, row/column operations, and cell selection out of the box
-- Tables work correctly with undo/redo
-- Slash menu does not trigger inside table cells (already handled -- slash triggers at start of line or after space)
+- Table inserted inside an empty paragraph (standard behavior)
+- Table not insertable inside another table (TipTap's schema enforces this)
+- Slash menu does not trigger inside table cells (already handled by the existing slash-command plugin — it checks `$from.parent.type.name`)
+- Tab key navigates between cells (built into the Table extension's keymap)
+- Undo/redo works correctly across table insertions (ProseMirror history)
+- Delete key on an empty document with only a table works without crash (Gapcursor handles exit from table)
 
-## Technical Details
+## Files Changed
 
-### 1. Install `@tiptap/extension-table` (includes Table, TableRow, TableCell, TableHeader)
+### `src/components/PageEditor.tsx`
 
-### 2. Update `src/components/PageEditor.tsx`
-- Import `TableKit` from `@tiptap/extension-table` (bundles Table, TableRow, TableCell, TableHeader)
-- Add `TableKit` to the editor's extensions array
+- **Remove** `import { TableKit } from "@tiptap/extension-table"`
+- **Add** `import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table"`
+- **Replace** `TableKit` in the extensions array with:
+  ```ts
+  Table.configure({ resizable: false }),
+  TableRow,
+  TableHeader,
+  TableCell,
+  ```
 
-### 3. Update `src/components/editor/SlashCommandMenu.tsx`
-- Import `Table2` icon from lucide-react
-- Add a new command item after Image in the Media category:
-  - Title: "Table"
-  - Description: "Insert a table"
-  - Search terms: table, grid, rows, columns
-  - Command: `editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()`
-
-### 4. Update `src/index.css`
-- Add table styles for the editor's prose area (borders on cells, padding, header row styling)
-
+That's the only change needed. The slash menu command and CSS styles are already correct.
