@@ -1,206 +1,173 @@
 
-# Floating Text Selection Toolbar (Bubble Menu)
+# Sidebar: Remove Recent, Drag-to-Reorder, and Untitled Fallback
 
-## Overview
+## Summary of Changes
 
-A context-sensitive formatting toolbar that appears above any text selection in the editor. It delivers all the formatting actions from the specification using TipTap's built-in `BubbleMenu` extension (which ships with `@tiptap/react`) for positioning, extended with dropdowns and a color/highlight picker.
+Three independent improvements to the sidebar, implemented cleanly with minimal blast radius.
 
 ---
 
-## New Packages Required
+## 1. Remove the "Recent" Segment
 
-| Package | Purpose |
+### What changes
+- `src/components/AppSidebar.tsx`: Remove the entire `{/* Recents */}` JSX block and the `useRecentPages` import/call.
+- `src/hooks/use-pages.ts`: The `useRecentPages` and `useTrackPageOpen` hooks still exist (they are still called from `PageEditor.tsx` via `trackOpen.mutate`) — only the import in `AppSidebar.tsx` is removed.
+- `AppSidebar.tsx` import line: Remove `useRecentPages` from the destructured import (keep `useFavoritePages`).
+
+### Corner cases
+| Case | Handling |
 |---|---|
-| `@tiptap/extension-underline` | Underline mark |
-| `@tiptap/extension-color` | Text color (requires TextStyle) |
-| `@tiptap/extension-text-style` | Required peer for Color |
-| `@tiptap/extension-highlight` | Background highlight |
-
-All are official TipTap v3 extensions. No third-party packages needed.
+| `useTrackPageOpen` still used in `PageEditor.tsx` | Leave hook in `use-pages.ts` untouched |
+| `Clock` icon import | Remove from `AppSidebar.tsx` imports (no longer used) |
+| `useRecentPages` query still runs | Remove the `useRecentPages()` call from `AppSidebar` to stop the unnecessary network request |
 
 ---
 
-## Architecture
+## 2. Drag-to-Reorder — Pages and Favorites
 
-```text
-PageEditor.tsx
- └─ BubbleMenuToolbar (new component)
-      ├─ TextStyleDropdown   (Text / H1 / H2 / H3)
-      ├─ ListDropdown        (Bullet / Numbered / Checklist)
-      ├─ [divider]
-      ├─ BoldButton          (toggle, Cmd+B)
-      ├─ ItalicButton        (toggle, Cmd+I)
-      ├─ InlineCodeButton    (toggle, Cmd+`)
-      ├─ LinkButton          (opens existing LinkDialog in PageEditor)
-      ├─ StrikeButton        (toggle)
-      ├─ UnderlineButton     (toggle)
-      ├─ [divider]
-      ├─ ColorPickerButton   (text color popover)
-      ├─ HighlightButton     (background color popover)
-      ├─ [divider]
-      └─ MoreMenu            (clear formatting / copy plain text)
+### Database change
+The `pages` table currently has no ordering column. Rows are fetched ordered by `created_at`. To support persistent drag ordering, a `sort_order` integer column is added.
+
+**Migration SQL:**
+```sql
+ALTER TABLE public.pages ADD COLUMN sort_order integer;
+
+-- Backfill existing rows using row_number over created_at within each (space_id, parent_id) group
+UPDATE public.pages p
+SET sort_order = sub.rn
+FROM (
+  SELECT id,
+         ROW_NUMBER() OVER (
+           PARTITION BY space_id, parent_id
+           ORDER BY created_at ASC
+         ) AS rn
+  FROM public.pages
+) sub
+WHERE p.id = sub.id;
 ```
+
+No new RLS policy is needed — the existing "Allow all access to pages" policy covers UPDATE.
+
+### How reordering works (client-side only, no new library)
+
+Native HTML5 drag-and-drop is used (no extra package). This keeps the bundle small and avoids version compatibility issues with libraries like `dnd-kit` or `react-beautiful-dnd`.
+
+Each draggable item gets:
+- `draggable={true}`
+- `onDragStart` — stores the dragged page ID in `dragState` ref
+- `onDragOver` — sets a visual drop indicator (CSS class `drag-over`) on the target item
+- `onDrop` — computes new order and fires `useReorderPages` mutation
+- `onDragLeave` / `onDragEnd` — cleans up visual state
+
+### New hook: `useReorderPages` in `src/hooks/use-pages.ts`
+
+```ts
+export function useReorderPages() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (updates: { id: string; sort_order: number }[]) => {
+      // Batch update: one UPDATE per page (Supabase JS doesn't support batch UPDATE natively)
+      await Promise.all(
+        updates.map(({ id, sort_order }) =>
+          supabase.from("pages").update({ sort_order }).eq("id", id)
+        )
+      );
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["pages"] }),
+  });
+}
+```
+
+### Updated fetch ordering in `usePages`
+
+```ts
+.order("sort_order", { ascending: true, nullsFirst: false })
+.order("created_at", { ascending: true }) // tiebreaker for nulls
+```
+
+### Updated `useUpdatePage` signature
+
+Add `sort_order?: number` to the accepted fields so the reorder hook can call update cleanly.
+
+### PageTree changes (`src/components/PageTree.tsx`)
+
+`PageTreeItem` receives new props:
+- `onReorder: (draggedId: string, targetId: string, position: "before" | "after") => void`
+- Visual drop line shown using a CSS class on the target item (a 2px blue top/bottom border indicator)
+
+The `PageTree` component orchestrates the `draggedId` and passes the reorder callback down. After drop, it recalculates `sort_order` for all siblings:
+
+```
+// Example: pages A(1), B(2), C(3) — drag C before A
+// Result: C=1, A=2, B=3 → send {C: 1, A: 2, B: 3} to useReorderPages
+```
+
+Reorder is applied optimistically in local state while the mutation is in flight to feel instant.
+
+### Favorites drag-to-reorder
+
+Favorites are a flat list in `AppSidebar.tsx`. The `pages` table already has `is_favorite` as a boolean, but favorites have no dedicated ordering. The same `sort_order` column is reused — favoriting a page does not reset its `sort_order`.
+
+Favorites are rendered in `AppSidebar.tsx` with the same native drag-and-drop pattern, directly in the JSX (no sub-component needed since it's flat). After reorder, `sort_order` values for the reordered favorites pages are updated and the query invalidated.
+
+### Corner cases
+
+| Case | Handling |
+|---|---|
+| Drag a page onto itself | `draggedId === targetId` → no-op |
+| Drag a parent page into its own child | Reorder only moves within the same sibling group (same `parent_id`) — cannot change parent via drag in the sidebar, only reorder siblings |
+| Drop outside a valid target | `onDragLeave` / `onDragEnd` cleanup removes indicator, no reorder fires |
+| Network error on reorder | `onError` reverts local optimistic state via `qc.invalidateQueries` |
+| Pages at max depth (depth === 3) shown without expand | Still draggable — just no children shown |
+| Favorites and Pages share the same `sort_order` column | They are in different query groups and different UI lists — no conflict. `usePages` queries per `space_id`; favorites query filters by `is_favorite`. Ordering is independent within each list. |
+| Existing pages with `sort_order = null` | Migration backfills all. New pages created via `useCreatePage` should set `sort_order` to `MAX(sort_order) + 1` for the sibling group. This is handled by computing max sort_order from the current pages list in the create flow. |
+
+---
+
+## 3. "Untitled" Fallback for Blank Page Titles
+
+### Where blank titles appear
+- `PageTree.tsx` — `{page.title}` in both the collapsible and leaf variants
+- `AppSidebar.tsx` — Favorites list `{page.title}`
+
+### Fix
+Replace bare `{page.title}` with a helper:
+
+```ts
+const displayTitle = (title: string) => title?.trim() || "Untitled";
+```
+
+Applied in:
+- `PageTreeItem` (both the collapsible header and leaf node)
+- Favorites loop in `AppSidebar.tsx`
+
+### Styling
+"Untitled" gets a muted italic style to visually distinguish it from real titles:
+
+```tsx
+<span className={`truncate ${!page.title?.trim() ? "italic text-muted-foreground/50" : ""}`}>
+  {displayTitle(page.title)}
+</span>
+```
+
+### Corner cases
+
+| Case | Handling |
+|---|---|
+| Title is `null` | `page.title` is typed as `string` (NOT NULL in DB with default `'Untitled'`), but defensive `?.trim()` handles any edge case |
+| Title is whitespace-only (e.g. user typed spaces) | `.trim()` converts to empty string → shows "Untitled" |
+| Title changes while user is typing in editor | Sidebar is reactively updated via query invalidation after the 1.5s auto-save debounce — no special handling needed |
+| Favorites section shows blank title | Fixed identically by applying the same helper in `AppSidebar.tsx` favorites loop |
 
 ---
 
 ## Files Changed
 
-| File | Action |
+| File | Change |
 |---|---|
-| `package.json` | Add 4 new TipTap extensions |
-| `src/components/PageEditor.tsx` | Register new extensions; mount `<BubbleMenuToolbar>`, wire link dialog open |
-| `src/components/editor/BubbleMenuToolbar.tsx` | New — the full bubble menu component |
-| `src/index.css` | Styles for `.bubble-toolbar`, dropdowns, color swatches |
+| Database migration | Add `sort_order integer` column to `pages`, backfill from `created_at` |
+| `src/hooks/use-pages.ts` | Add `useReorderPages` hook; update `usePages` to order by `sort_order`; add `sort_order` to `useUpdatePage` params |
+| `src/components/PageTree.tsx` | Add drag-and-drop props and logic; apply "Untitled" fallback |
+| `src/components/AppSidebar.tsx` | Remove Recent section and its imports; add drag-and-drop to Favorites; apply "Untitled" fallback to Favorites |
 
----
-
-## Detailed Implementation
-
-### 1. `package.json`
-Add:
-```
-@tiptap/extension-underline
-@tiptap/extension-color
-@tiptap/extension-text-style
-@tiptap/extension-highlight
-```
-
-### 2. `src/components/PageEditor.tsx` changes
-
-**Extensions array** — add after `LinkExtension`:
-```ts
-import Underline from "@tiptap/extension-underline";
-import { Color } from "@tiptap/extension-color";
-import TextStyle from "@tiptap/extension-text-style";
-import Highlight from "@tiptap/extension-highlight";
-...
-Underline,
-TextStyle,
-Color,
-Highlight.configure({ multicolor: true }),
-```
-
-**Render** — add `<BubbleMenuToolbar>` just before `<TableToolbar>`:
-```tsx
-{editor && (
-  <BubbleMenuToolbar
-    editor={editor}
-    onLinkClick={(existingUrl) => {
-      setLinkUrl(existingUrl);
-      setLinkDialogOpen(true);
-    }}
-  />
-)}
-```
-
-The existing link dialog in `PageEditor` is reused — the bubble menu's Link button just calls `onLinkClick` which opens the already-wired dialog. This avoids duplicating the link UI.
-
-### 3. `src/components/editor/BubbleMenuToolbar.tsx` (new file)
-
-Uses TipTap's built-in `BubbleMenu` component from `@tiptap/react` for positioning (handles viewport clamping, scroll, appears/disappears automatically on selection change).
-
-**Visibility guard** — passed to `BubbleMenu` as `shouldShow`:
-```ts
-shouldShow: ({ editor, state }) => {
-  const { selection } = state;
-  // Hide if empty selection
-  if (selection.empty) return false;
-  // Hide if inside code block
-  const { $from } = selection;
-  if ($from.parent.type.name === "codeBlock") return false;
-  // Hide if selection is inside inline code only (all marks are "code")
-  // This is a best-effort check — if the only mark is code, hide toolbar
-  return true;
-}
-```
-
-**Text Style Dropdown** — uses a Radix `DropdownMenu`:
-- "Text" → `editor.chain().focus().setParagraph().run()`
-- "Heading 1" → `setHeading({ level: 1 })`
-- "Heading 2" → `setHeading({ level: 2 })`
-- "Heading 3" → `setHeading({ level: 3 })`
-
-The label shown in the button reflects the current block type (auto-detected from `editor.isActive`).
-
-**List Dropdown** — uses a Radix `DropdownMenu`:
-- "Bullet List" → `toggleBulletList()`
-- "Numbered List" → `toggleOrderedList()`
-- "Checklist" → `toggleTaskList()`
-
-**Inline buttons** (toggle behavior, active state highlighted):
-
-| Button | Command | Active check |
-|---|---|---|
-| **B** Bold | `toggleBold()` | `editor.isActive("bold")` |
-| `</>` Code | `toggleCode()` | `editor.isActive("code")` |
-| *I* Italic | `toggleItalic()` | `editor.isActive("italic")` |
-| 🔗 Link | calls `onLinkClick(existingHref)` | `editor.isActive("link")` |
-| ~~S~~ Strike | `toggleStrike()` | `editor.isActive("strike")` |
-| <u>U</u> Underline | `toggleUnderline()` | `editor.isActive("underline")` |
-
-**Color Picker** — small popover with a 3×3 color grid:
-
-Colors: Default, Red, Orange, Yellow, Green, Teal, Blue, Purple, Grey
-
-- Text color button (A with colored underline): `editor.chain().focus().setColor(hex).run()` / `unsetColor()` for Default
-- Highlight button (marker icon): `editor.chain().focus().setHighlight({ color: hex }).run()` / `unsetHighlight()` for Default
-
-Both pickers share the same `ColorSwatch` sub-component, just passing a different `onSelect` callback. They open as Radix `Popover` panels inside the bubble toolbar (staying inside the toolbar prevents focus loss from the editor).
-
-**More Menu (⋯)** — Radix `DropdownMenu`:
-- "Clear formatting" → `editor.chain().focus().clearNodes().unsetAllMarks().run()`
-- "Copy as plain text" → reads `editor.state.selection` text via `editor.state.doc.textBetween(from, to, ' ')` and copies to clipboard
-- "Convert to plain text" → same as clear formatting
-
-**onMouseDown prevention**: Every interactive element in the toolbar uses `onMouseDown={(e) => e.preventDefault()}` (same pattern as `TableToolbar`) to keep editor focus and preserve the selection while the toolbar is open. Without this, clicking a button would collapse the selection before the command fires.
-
-### 4. `src/index.css` additions
-
-```css
-/* Bubble menu toolbar */
-.bubble-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 1px;
-  background: hsl(var(--popover));
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 20px -4px rgba(0,0,0,0.15), 0 1px 4px rgba(0,0,0,0.08);
-  padding: 3px 4px;
-  height: 36px;
-  z-index: 70;   /* above table toolbar (60) and slash menu (50) */
-}
-
-.bubble-toolbar-btn { /* same pattern as .table-toolbar-btn */ }
-.bubble-toolbar-btn-active { background: hsl(var(--accent)); }
-.bubble-toolbar-divider { /* 1px vertical separator */ }
-.bubble-dropdown-label { /* Text Style / List dropdown trigger text */ }
-```
-
----
-
-## Corner Cases Handled
-
-| Case | Handling |
-|---|---|
-| Selection inside `codeBlock` | `shouldShow` returns false — toolbar hidden |
-| Selection inside inline `code` mark | Toolbar shown but Bold/Italic/etc. appear dim (code overrides) — acceptable MVP |
-| Clicking toolbar button clears selection | `onMouseDown` prevents blur; selection is preserved |
-| Link button when no selection | Toolbar already hidden (empty selection check) |
-| Existing link in selection | `onLinkClick` passes `editor.getAttributes("link").href` to pre-fill the dialog |
-| Color picker opening collapses popover | Color picker opens as a child `Popover` inside the toolbar container using `portal={false}` or a custom wrapper to stay inside the BubbleMenu mount |
-| Viewport edge clipping | TipTap's BubbleMenu handles this natively via floating-ui / Tippy.js underneath |
-| Selection spans table cells | `shouldShow` returns true — formatting applies to selected text within cells |
-| Undo | Every TipTap command pushes one ProseMirror history step; undo restores previous state |
-| Cmd+K shortcut conflict | Existing handler in PageEditor already opens link dialog when editor is focused; bubble menu Link button reuses same `onLinkClick` callback — no double-dialog |
-| Escape key | TipTap's BubbleMenu hides on editor blur; Esc in the editor removes selection, hiding toolbar |
-| "More" dropdown z-index | Radix portal renders at body level with high z-index; no clipping issues |
-
----
-
-## What is Excluded (per spec)
-
-- AI features
-- Font family / font size selectors
-- Comment annotations (Phase 2)
-- Animations-heavy effects
+No new packages needed.
