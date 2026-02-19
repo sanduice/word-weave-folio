@@ -74,6 +74,8 @@ export function SlashCommandMenu({ editor }: Props) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [position, setPosition] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const menuRef = useRef<HTMLDivElement>(null);
+  // Track whether menu was already active so we only reset selection on first open
+  const wasActiveRef = useRef(false);
 
   const filtered = filterCommands(query);
 
@@ -100,17 +102,33 @@ export function SlashCommandMenu({ editor }: Props) {
     const update = () => {
       const state = slashCommandPluginKey.getState(editor.state) as SlashCommandState | undefined;
       if (!state) return;
+
+      const justOpened = state.active && !wasActiveRef.current;
+      wasActiveRef.current = state.active;
+
       setActive(state.active);
       setQuery(state.query);
+
       if (state.active) {
-        setSelectedIndex(0);
-        // Get cursor position for menu placement
+        // Only reset selection index when the menu first opens, not on every keystroke
+        if (justOpened) {
+          setSelectedIndex(0);
+        }
+
+        // Fix #1: Position relative to the `relative` wrapper inside the editor area,
+        // not the outer scroll container. The menu's CSS parent is the `max-w-3xl` div.
         const coords = editor.view.coordsAtPos(editor.state.selection.from);
-        const editorRect = editor.view.dom.closest(".overflow-auto")?.getBoundingClientRect()
-          ?? editor.view.dom.getBoundingClientRect();
+        // Walk up to find the nearest `position: relative` container that wraps the menu
+        const relativeParent =
+          (editor.view.dom.closest(".relative") as HTMLElement) ??
+          (editor.view.dom.offsetParent as HTMLElement) ??
+          editor.view.dom;
+        const parentRect = relativeParent.getBoundingClientRect();
+        const scrollParent = relativeParent.closest(".overflow-auto") as HTMLElement | null;
+        const scrollTop = scrollParent?.scrollTop ?? 0;
         setPosition({
-          top: coords.bottom - editorRect.top + 4,
-          left: coords.left - editorRect.left,
+          top: coords.bottom - parentRect.top + scrollTop + 4,
+          left: coords.left - parentRect.left,
         });
       }
     };
@@ -165,7 +183,13 @@ export function SlashCommandMenu({ editor }: Props) {
                 key={item.title}
                 data-index={idx}
                 className={`slash-command-item ${idx === selectedIndex ? "slash-command-item-selected" : ""}`}
-                onClick={() => executeCommand(item)}
+                // Fix #3: Use onMouseDown + preventDefault to prevent the editor from
+                // losing focus (which would trigger a transaction and reset the selection)
+                // before the click fires. The command runs on mousedown instead of click.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  executeCommand(item);
+                }}
                 onMouseEnter={() => setSelectedIndex(idx)}
               >
                 <span className="slash-command-icon">{item.icon}</span>
