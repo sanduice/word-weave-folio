@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
-export type Page = Tables<"pages">;
+export type Page = Tables<"pages"> & { sort_order?: number | null };
 
 export function usePages(spaceId: string | undefined) {
   return useQuery({
@@ -13,6 +13,7 @@ export function usePages(spaceId: string | undefined) {
         .from("pages")
         .select("*")
         .eq("space_id", spaceId!)
+        .order("sort_order", { ascending: true, nullsFirst: false })
         .order("created_at", { ascending: true });
       if (error) throw error;
       return data as Page[];
@@ -49,7 +50,7 @@ export function useCreatePage() {
 export function useUpdatePage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; title?: string; content?: string; is_favorite?: boolean; parent_id?: string | null }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; title?: string; content?: string; is_favorite?: boolean; parent_id?: string | null; sort_order?: number }) => {
       const { data, error } = await supabase.from("pages").update(updates).eq("id", id).select().single();
       if (error) throw error;
       return data as Page;
@@ -85,6 +86,7 @@ export function useFavoritePages() {
         .from("pages")
         .select("*, spaces(name, icon)")
         .eq("is_favorite", true)
+        .order("sort_order", { ascending: true, nullsFirst: false })
         .order("title");
       if (error) throw error;
       return data;
@@ -111,7 +113,6 @@ export function useTrackPageOpen() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (pageId: string) => {
-      // Delete old entry for this page if exists, then insert fresh
       await supabase.from("recent_pages").delete().eq("page_id", pageId);
       const { error } = await supabase.from("recent_pages").insert({ page_id: pageId });
       if (error) throw error;
@@ -145,6 +146,27 @@ export function useBacklinks(pageId: string | undefined) {
         .eq("to_page_id", pageId!);
       if (error) throw error;
       return data;
+    },
+  });
+}
+
+export function useReorderPages() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (updates: { id: string; sort_order: number }[]) => {
+      await Promise.all(
+        updates.map(({ id, sort_order }) =>
+          supabase.from("pages").update({ sort_order }).eq("id", id)
+        )
+      );
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["pages"] });
+      qc.invalidateQueries({ queryKey: ["favorites"] });
+    },
+    onError: () => {
+      qc.invalidateQueries({ queryKey: ["pages"] });
+      qc.invalidateQueries({ queryKey: ["favorites"] });
     },
   });
 }
