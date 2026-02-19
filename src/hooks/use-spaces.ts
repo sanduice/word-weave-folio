@@ -21,8 +21,14 @@ export function useSpaces() {
 export function useCreateSpace() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (space: TablesInsert<"spaces">) => {
-      const { data, error } = await supabase.from("spaces").insert(space).select().single();
+    mutationFn: async (space: Omit<TablesInsert<"spaces">, "user_id">) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { data, error } = await supabase
+        .from("spaces")
+        .insert({ ...space, user_id: user.id })
+        .select()
+        .single();
       if (error) throw error;
       return data;
     },
