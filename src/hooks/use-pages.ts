@@ -36,8 +36,14 @@ export function usePage(pageId: string | undefined) {
 export function useCreatePage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (page: TablesInsert<"pages">) => {
-      const { data, error } = await supabase.from("pages").insert(page).select().single();
+    mutationFn: async (page: Omit<TablesInsert<"pages">, "user_id">) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { data, error } = await supabase
+        .from("pages")
+        .insert({ ...page, user_id: user.id })
+        .select()
+        .single();
       if (error) throw error;
       return data as Page;
     },

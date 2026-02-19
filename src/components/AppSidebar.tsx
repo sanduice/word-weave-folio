@@ -11,12 +11,20 @@ import {
   SidebarMenuButton,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSpaces } from "@/hooks/use-spaces";
 import { usePages, useFavoritePages, useReorderPages } from "@/hooks/use-pages";
 import { useAppStore } from "@/stores/app-store";
+import { useSession, useProfile, useLogout } from "@/hooks/use-auth";
 import { SpaceSelector } from "./SpaceSelector";
 import { PageTree } from "./PageTree";
-import { Star, FileText, GripVertical } from "lucide-react";
+import { Star, FileText, GripVertical, LogOut, ChevronUp } from "lucide-react";
 
 const displayTitle = (title: string) => title?.trim() || "Untitled";
 
@@ -26,6 +34,9 @@ export function AppSidebar() {
   const { data: pages } = usePages(selectedSpaceId ?? undefined);
   const { data: favorites } = useFavoritePages();
   const reorder = useReorderPages();
+  const { user } = useSession();
+  const { data: profile } = useProfile(user?.id);
+  const logout = useLogout();
 
   // Auto-select first space
   useState(() => {
@@ -196,7 +207,33 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-2">
-        <p className="text-[10px] text-muted-foreground/40 text-center">Notespace v1</p>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center gap-2 p-2 rounded-lg hover:bg-sidebar-accent w-full text-left transition-colors cursor-pointer">
+              <Avatar className="h-7 w-7 shrink-0">
+                <AvatarImage src={profile?.avatar_url ?? undefined} />
+                <AvatarFallback className="text-xs">
+                  {profile?.full_name?.[0]?.toUpperCase() ?? user?.email?.[0]?.toUpperCase() ?? "U"}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate text-sidebar-foreground">
+                  {profile?.full_name ?? user?.email ?? "User"}
+                </p>
+                {profile?.email && (
+                  <p className="text-[10px] text-muted-foreground truncate">{profile.email}</p>
+                )}
+              </div>
+              <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-52">
+            <DropdownMenuItem onClick={logout} className="gap-2 text-destructive focus:text-destructive">
+              <LogOut className="h-4 w-4" />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarFooter>
     </Sidebar>
   );
