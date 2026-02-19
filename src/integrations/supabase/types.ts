@@ -57,6 +57,7 @@ export type Database = {
           id: string
           is_favorite: boolean
           parent_id: string | null
+          sort_order: number | null
           space_id: string
           title: string
           updated_at: string
@@ -67,6 +68,7 @@ export type Database = {
           id?: string
           is_favorite?: boolean
           parent_id?: string | null
+          sort_order?: number | null
           space_id: string
           title?: string
           updated_at?: string
@@ -77,6 +79,7 @@ export type Database = {
           id?: string
           is_favorite?: boolean
           parent_id?: string | null
+          sort_order?: number | null
           space_id?: string
           title?: string
           updated_at?: string
