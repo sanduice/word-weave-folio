@@ -61,6 +61,7 @@ export type Database = {
           space_id: string
           title: string
           updated_at: string
+          user_id: string
         }
         Insert: {
           content?: string
@@ -72,6 +73,7 @@ export type Database = {
           space_id: string
           title?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
           content?: string
@@ -83,6 +85,7 @@ export type Database = {
           space_id?: string
           title?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: [
           {
@@ -100,6 +103,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       recent_pages: {
         Row: {
@@ -134,6 +164,7 @@ export type Database = {
           icon: string
           id: string
           name: string
+          user_id: string
         }
         Insert: {
           created_at?: string
@@ -141,6 +172,7 @@ export type Database = {
           icon?: string
           id?: string
           name: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -148,6 +180,7 @@ export type Database = {
           icon?: string
           id?: string
           name?: string
+          user_id?: string
         }
         Relationships: []
       }
