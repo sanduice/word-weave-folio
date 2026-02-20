@@ -1,227 +1,244 @@
 
-# Folder System — Implementation Plan
+# Sticky Writing Toolbar & Advanced Table Controls — Implementation Plan
 
-## Current State Analysis
+## What Already Exists (Do Not Re-build)
 
-The app currently has:
-- **Spaces** as top-level containers (no `folder_id` column)
-- **Pages** with `parent_id` (self-referential) — the existing tree is a page-nesting system, NOT a true folder system
-- `PageTree` renders page hierarchy by `parent_id`, with drag-to-reorder using `sort_order`
-- No dedicated `folders` table exists
+| Feature | Status | Location |
+|---|---|---|
+| Bubble menu (Bold, Italic, Underline, Strikethrough, Code, Link, Text color, Highlight, Text style dropdown, List dropdown, Clear formatting) | Done | `BubbleMenuToolbar.tsx` |
+| Table floating toolbar (Add/Delete row/column, Merge/Split cells, Toggle header, Delete table) | Done | `TableToolbar.tsx` |
+| Slash command menu (/, with all block types including Table insert) | Done | `SlashCommandMenu.tsx` |
+| TopBar with sticky `position: sticky top-0` | Done | `TopBar.tsx` (h-12, sticky top-0 z-30) |
+| Undo/Redo (Ctrl+Z/Shift+Z via browser default in TipTap) | Done | TipTap StarterKit |
+| Keyboard shortcut Cmd+K for link dialog | Done | `PageEditor.tsx` |
+| Keyboard shortcut Cmd+` for inline code | Done | `PageEditor.tsx` |
 
-The key architectural decision: **The existing `parent_id` on pages is currently used to nest pages under other pages.** The folder system is a distinct concept — folders are containers, not content. This plan introduces a proper `folders` table and adds a `folder_id` foreign key to `pages`, while keeping `parent_id` for page-to-page nesting intact (pages can still be nested inside each other within a folder).
+## What Needs to Be Built (Gap Analysis)
 
----
+### New: Sticky Editor Toolbar (always-visible formatting bar)
 
-## Architecture Decision
+The PRD calls for a sticky toolbar that is always visible when editing a page — not a floating bubble that only appears on selection. The current setup has:
+- `TopBar` at `sticky top-0 z-30` with breadcrumb + search + new page
+- No persistent formatting toolbar below it
 
-```text
-Space
- └─ Folder (folder_id = null → root level)
-     ├─ Page (folder_id = folder.id)
-     ├─ Page (folder_id = folder.id)
-     └─ Folder (parent_folder_id = parent.id)
-         └─ Page (folder_id = nested_folder.id)
-```
+The sticky toolbar will live **below the TopBar** and above the editor content, staying pinned as the user scrolls. It will be rendered inside `PageEditor` and will be visible whenever a page is open (not when the "Select a page" placeholder is showing).
 
-The sidebar tree will render a **unified tree** of folders and pages mixed together, sorted by `sort_order`. Items with `folder_id = null` and `parent_id = null` are at the space root level.
+### New: Table Cell Background Color (in TableToolbar)
 
----
+The current `TableToolbar` does not have cell background color control. This needs a color picker button group added.
 
-## Database Changes (Migration)
+### New: Table full-width toggle (per-table)
 
-### New `folders` table
+A toggle to make the table stretch edge-to-edge within the content area.
 
-```sql
-CREATE TABLE public.folders (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  space_id uuid NOT NULL REFERENCES public.spaces(id) ON DELETE CASCADE,
-  parent_folder_id uuid REFERENCES public.folders(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL,
-  name text NOT NULL DEFAULT 'New Folder',
-  sort_order integer,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
+### Out of Scope for Now (per PRD §10)
 
-ALTER TABLE public.folders ENABLE ROW LEVEL SECURITY;
-
--- RLS policies
-CREATE POLICY folders_select ON public.folders FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY folders_insert ON public.folders FOR INSERT WITH CHECK (auth.uid() = user_id);
-CREATE POLICY folders_update ON public.folders FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY folders_delete ON public.folders FOR DELETE USING (auth.uid() = user_id);
-
--- updated_at trigger
-CREATE TRIGGER folders_updated_at
-  BEFORE UPDATE ON public.folders
-  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
-```
-
-### Add `folder_id` to `pages` table
-
-```sql
-ALTER TABLE public.pages ADD COLUMN folder_id uuid REFERENCES public.folders(id) ON DELETE SET NULL;
-```
-
-Pages without a folder (`folder_id = NULL`) appear at the space root level, same as today. This is backward-compatible — no existing page data breaks.
+- Image upload (URL prompt already exists via slash command)
+- Emoji picker (requires third-party library not yet installed)
+- Mention system
+- Focus mode / side panel toggle
+- Comment threads
 
 ---
 
-## Files Overview
-
-### New Files
+## Files to Create
 
 | File | Purpose |
 |---|---|
-| `src/hooks/use-folders.ts` | All folder CRUD hooks |
-| `src/components/FolderTree.tsx` | Unified folder + page tree renderer |
-| `src/components/FolderItem.tsx` | Single folder row with context menu, inline rename, drag/drop |
+| `src/components/editor/StickyToolbar.tsx` | New always-visible sticky formatting toolbar |
 
-### Modified Files
+## Files to Modify
 
 | File | What Changes |
 |---|---|
-| `src/components/AppSidebar.tsx` | Replace `PageTree` with `FolderTree`; add "New Folder" button next to "New Page" in header |
-| `src/hooks/use-pages.ts` | Add `folder_id` to `useCreatePage`, `useUpdatePage`; update `useSearchPages` to include folder path |
-| `src/stores/app-store.ts` | No changes required — `selectedPageId` / `selectedSpaceId` are sufficient |
-| `src/integrations/supabase/types.ts` | Auto-regenerated after migration |
+| `src/components/PageEditor.tsx` | Mount `StickyToolbar` between TopBar and editor content; lift `linkDialog` state into shared prop |
+| `src/components/editor/TableToolbar.tsx` | Add cell background color picker button group |
+| `src/index.css` | Add `.sticky-toolbar` and related CSS styles |
 
 ---
 
-## Detailed Implementation
+## Detailed Design
 
-### 1. `src/hooks/use-folders.ts`
+### 1. `StickyToolbar.tsx` — New Component
 
-Exports:
-- `useFolders(spaceId)` — fetches all folders for a space ordered by `sort_order`
-- `useCreateFolder()` — insert with `user_id`, `space_id`, optional `parent_folder_id`
-- `useUpdateFolder()` — rename, move (change `parent_folder_id`), reorder (`sort_order`)
-- `useDeleteFolder()` — cascades via DB (ON DELETE CASCADE for child folders, ON DELETE SET NULL for pages)
-- `useReorderFolders()` — batch update `sort_order` for optimistic drag reordering
+The toolbar is sticky within the editor scroll area. It renders as a `div` with `position: sticky; top: 0; z-index: 40` so it pins just below the main `TopBar` (which is `z-30`).
 
-### 2. `src/components/FolderTree.tsx`
-
-This replaces `PageTree` as the sidebar content renderer. It renders a **mixed tree** of folders and pages at each level:
-
-```text
-Root level (folder_id = null AND parent_id = null):
-  📁 Pre-Start Materials   ← folder
-  📄 Getting Started       ← page (folder_id = null)
-  
-Inside a folder (folder_id = folder.id):
-  📁 Week 1               ← nested folder
-  📄 Day 1 Notes          ← page
-```
-
-The component recursively renders using:
-- `folders.filter(f => f.parent_folder_id === currentFolderId)`  
-- `pages.filter(p => p.folder_id === currentFolderId && !p.parent_id)`
-
-Both folders and pages share the same `sort_order` integer for mixed ordering. Drop targets handle both types.
-
-### 3. `src/components/FolderItem.tsx`
-
-A single folder row with:
-
-**Visual anatomy:**
-```
-[grip] [▶] [📁] Folder Name    [⋯]
-```
-
-**States:**
-- Collapsed / expanded via `Collapsible`
-- Inline rename: clicking the name or selecting "Rename" from context menu replaces the label with an `<input>`, Enter saves, Esc cancels
-- Drop indicator: `border-t-2` or `border-b-2` on drag-over (sibling reorder), OR a blue background highlight when hovering to drop INTO the folder
-
-**Context menu (on `⋯` hover or right-click):**
-- Add Page (creates page with `folder_id = this folder's id`)
-- Add Folder (creates child folder with `parent_folder_id = this folder's id`)
-- Rename
-- Move to... (opens a popover listing other folders in the same space)
-- --- separator ---
-- Delete (opens confirmation dialog)
-
-**Delete confirmation dialog:**
-> "Deleting **[Folder Name]** will permanently delete all its sub-folders. Pages inside will be moved to the space root."
->
-> Buttons: **Delete** | **Cancel**
-
-Note: The DB `ON DELETE CASCADE` handles child folders. `ON DELETE SET NULL` on `pages.folder_id` moves pages to root automatically — no orphan pages.
-
-### 4. Drag & Drop System
-
-The existing page drag system uses `draggedId` refs and `sort_order` updates. The folder system extends this with a **drag type** so you know what's being dragged:
-
-```ts
-// In dataTransfer
-e.dataTransfer.setData("type", "folder" | "page");
-e.dataTransfer.setData("id", item.id);
-```
-
-**Drop zones:**
-- **Before/after** a folder or page → sibling reorder (updates `sort_order`)
-- **Into** a folder (center zone, highlighted differently) → reparent (updates `folder_id` on page or `parent_folder_id` on folder)
-
-**Circular nesting guard:**
-Before updating `parent_folder_id`, walk the ancestor chain from the target folder upward. If the dragged folder's ID appears in that chain, reject the drop silently.
-
-### 5. `useCreatePage` update in `use-pages.ts`
-
-Add `folder_id?: string | null` to the mutation parameter. When a page is created from inside a folder context menu, the `folder_id` is passed. When created from the sidebar root `+ New Page` button, `folder_id` remains `null`.
-
-### 6. AppSidebar changes
-
-- Replace `<PageTree>` with `<FolderTree>`
-- Pass both `folders` (from `useFolders`) and `pages` (from `usePages`) as props
-- Add a `+ New Folder` button next to the section label, alongside the existing `+ New Page` button
-
-### 7. Search Dialog update (`SearchDialog.tsx`)
-
-Enhance results to show folder path:
+**Toolbar groups (left to right):**
 
 ```
-📄 Day 1 Notes
-   📘 My Space › 📁 Initial Batch › 📁 Week 1
+[Undo] [Redo]  |  [Text Style ▾]  |  [B] [I] [U] [S] [Code]  |  [Color] [Highlight]  |  [• List ▾]  |  [Link] [—] [Table]
 ```
 
-The `useSearchPages` query will join with folders to construct the path. In MVP: show `folder.name` if `folder_id` is set, plus the space name.
+**Group A — History:**
+- Undo: `editor.chain().focus().undo().run()` — disabled when `!editor.can().undo()`
+- Redo: `editor.chain().focus().redo().run()` — disabled when `!editor.can().redo()`
+
+**Group B — Text Style (Dropdown):**
+- Reuses the same `TextStyleDropdown` logic from `BubbleMenuToolbar` — extracts it into a shared sub-component (or duplicates it in `StickyToolbar` for isolation)
+- Options: Normal Text, H1, H2, H3, Quote, Code Block
+
+**Group C — Inline Formatting (Toggle buttons):**
+- Bold (Cmd+B), Italic (Cmd+I), Underline (Cmd+U), Strikethrough, Inline Code (Cmd+`)
+- Each shows `active` state highlight when cursor is in that mark
+
+**Group D — Color & Highlight (Popovers):**
+- Text color with palette (same colors as BubbleMenuToolbar)
+- Highlight color with palette (same colors)
+- Active color shown as a colored underline beneath the icon
+
+**Group E — Lists:**
+- Bullet list, Ordered list, Checklist (as individual buttons, not dropdown, for visibility)
+
+**Group F — Insert:**
+- Link button (opens the existing link dialog via `onLinkClick` prop)
+- Divider / HR button
+- Table insert (3×3 with header)
+
+**Active state logic:**
+All toggle buttons call `editor.isActive(...)` on every `editor.on("transaction")` event to update their active styling. The component subscribes to the editor's transaction event and forces a re-render using `useState` + `useEffect`.
+
+**Disabled when no page open:**
+The toolbar is only rendered when `selectedPageId` is set and the editor is mounted.
+
+**Visual design:**
+- Height: 40px
+- Background: `hsl(var(--background))` with `border-b border-border`
+- Sticky below the `TopBar` using `sticky top-[48px]` (TopBar is 48px/h-12)
+- Buttons: 28×28px, rounded, same style as existing toolbar buttons
+- Dividers: 1px vertical separators between groups
+- On scroll: stays pinned, content slides beneath it
+
+**Responsive behavior:**
+- On narrow screens (mobile), show only the most critical buttons: Bold, Italic, Link, and a "More" dropdown containing the rest
+- Detect via `window.innerWidth < 768` with a `resize` listener
 
 ---
 
-## Edge Cases Handled
+### 2. `TableToolbar.tsx` — Add Cell Background Color
 
-| Case | Solution |
-|---|---|
-| Delete folder with nested folders | `ON DELETE CASCADE` on `folders.parent_folder_id` — all descendants deleted |
-| Delete folder with pages inside | `ON DELETE SET NULL` on `pages.folder_id` — pages moved to space root, no data loss |
-| Circular drag (drop folder into itself or descendant) | Walk ancestor chain before confirming drop; reject silently with no UI change |
-| Inline rename of currently-selected folder | Local optimistic update in sidebar; DB update confirmed in background |
-| Drag a page from a folder to root | Set `folder_id = null` on the page |
-| Page nested under another page (existing `parent_id` nesting) | These pages are only shown when their parent page is expanded — `folder_id` on the parent page determines which folder they appear under |
-| Existing pages (no `folder_id`) | `folder_id = NULL` → they render at space root level, matching current behavior exactly. Zero data migration needed |
-| New page created from folder context menu | `folder_id` is passed to `useCreatePage`; page immediately appears inside that folder |
-| Folder collapse state across refresh | Stored in `localStorage` keyed by `folderId`, restored on mount |
-| Very deep nesting (>7 levels) | UI allows it (no hard DB limit); visually indented with overflow truncation and `title` tooltip on the name |
+Add a new group at the end of the `groups` array:
+
+```
+| [Cell BG Color picker] [Clear Cell] |
+```
+
+**Cell Background Color:**
+- A color palette popover (same palette pattern as BubbleMenuToolbar)
+- Uses a custom TipTap command: set the `style` attribute of the selected `tableCell`
+- TipTap's `TableCell` extension supports passing `HTMLAttributes` via `extend()` to allow inline `style`
+
+**Implementation:**
+Extend `TableCell` in `PageEditor.tsx` to allow inline `backgroundColor` attribute:
+
+```typescript
+// In PageEditor.tsx
+import { TableCell } from "@tiptap/extension-table";
+
+const CustomTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      backgroundColor: {
+        default: null,
+        parseHTML: el => el.style.backgroundColor || null,
+        renderHTML: attrs => {
+          if (!attrs.backgroundColor) return {};
+          return { style: `background-color: ${attrs.backgroundColor}` };
+        },
+      },
+    };
+  },
+});
+```
+
+Then the toolbar calls:
+```typescript
+editor.chain().focus().setCellAttribute('backgroundColor', color).run()
+```
+
+**Clear cell content button:**
+```typescript
+editor.chain().focus().clearContent().run()
+```
+(Clears content inside the focused cell)
+
+---
+
+### 3. CSS in `index.css`
+
+```css
+/* Sticky Editor Toolbar */
+.sticky-toolbar {
+  position: sticky;
+  top: 48px;   /* height of TopBar */
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 8px;
+  height: 44px;
+  background: hsl(var(--background));
+  border-bottom: 1px solid hsl(var(--border));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sticky-toolbar-btn { /* same pattern as bubble-toolbar-btn, slightly larger */ }
+.sticky-toolbar-divider { /* same as bubble-toolbar-divider */ }
+```
+
+---
+
+### 4. `PageEditor.tsx` Changes
+
+- Mount `<StickyToolbar>` above `<EditorContent>` but inside the scroll wrapper
+- Pass `editor`, `onLinkClick` callback to it
+- Keep `containerRef` on the outer `flex-1 overflow-auto` div as today
+- The sticky toolbar goes **inside** the scroll container so it scrolls with the container's sticky context, not the full page
+
+```tsx
+return (
+  <div className="flex-1 flex flex-col overflow-auto" ref={containerRef}>
+    {/* Sticky toolbar — pins at top of the scroll area */}
+    {editor && (
+      <StickyToolbar
+        editor={editor}
+        onLinkClick={(url) => { setLinkUrl(url); setLinkDialogOpen(true); }}
+      />
+    )}
+    <div className="max-w-3xl mx-auto px-6 py-8 relative flex-1">
+      ...rest of content...
+    </div>
+  </div>
+);
+```
 
 ---
 
 ## Implementation Sequence
 
-1. **Database migration** — create `folders` table + add `folder_id` to `pages`
-2. **`use-folders.ts`** — all CRUD hooks
-3. **`use-pages.ts`** — add `folder_id` support to `useCreatePage`, `useUpdatePage`
-4. **`FolderItem.tsx`** — single folder row component with context menu, inline rename, drag/drop
-5. **`FolderTree.tsx`** — recursive mixed tree renderer
-6. **`AppSidebar.tsx`** — wire up `FolderTree`, add "New Folder" button
-7. **`SearchDialog.tsx`** — add folder path to results
-
----
+1. Add CSS classes for sticky toolbar to `index.css`
+2. Create `StickyToolbar.tsx` with all button groups
+3. Extend `TableCell` in `PageEditor.tsx` for `backgroundColor` attribute
+4. Add cell background color group to `TableToolbar.tsx`
+5. Update `PageEditor.tsx` to mount `StickyToolbar` and use `CustomTableCell`
 
 ## What Is NOT Changing
 
-- The existing `parent_id` on pages (page-under-page nesting) is preserved unchanged
-- `PageEditor`, `TopBar`, `BubbleMenuToolbar`, `SlashCommandMenu` — untouched
-- Auth system, RLS policies for existing tables — untouched
-- Spaces system — untouched
-- Favorites — untouched (favorites are page-level, not folder-level)
+- `BubbleMenuToolbar.tsx` — kept as-is (selection-based floating toolbar remains, complements the sticky toolbar)
+- `SlashCommandMenu.tsx` — untouched
+- `TopBar.tsx` — untouched (breadcrumb + search stays)
+- Sidebar, auth, spaces, pages hooks — untouched
+- Folder system just implemented — untouched
+
+## Edge Cases
+
+| Case | Solution |
+|---|---|
+| Editor not focused when toolbar button clicked | All buttons use `editor.chain().focus()` to re-focus before executing |
+| Undo/Redo disabled state | Check `editor.can().undo()` / `editor.can().redo()` on each transaction |
+| Sticky toolbar overlaps table toolbar | Table toolbar is `z-60`, sticky toolbar is `z-40` — table toolbar wins and floats above |
+| Sticky toolbar overlaps bubble menu | Bubble menu is `z-70` — it floats above both, no conflict |
+| No page selected | `StickyToolbar` only renders when editor instance exists |
+| Cell background on multi-cell selection | TipTap's `setCellAttribute` applies to all selected cells |
+| Toolbar overflow on small screens | `overflow-x: auto; scrollbar-width: none` — horizontally scrollable without visible scrollbar |
