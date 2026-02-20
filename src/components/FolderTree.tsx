@@ -20,10 +20,9 @@ interface FolderTreeProps {
 }
 
 export function FolderTree({ folders, pages, selectedPageId, onSelectPage, spaceId }: FolderTreeProps) {
-  const dragState: DragState = {
-    draggedId: useRef<string | null>(null),
-    draggedType: useRef<"folder" | "page" | null>(null),
-  };
+  const draggedId = useRef<string | null>(null);
+  const draggedType = useRef<"folder" | "page" | null>(null);
+  const dragState: DragState = { draggedId, draggedType };
 
   const reorderFolders = useReorderFolders();
   const reorderPages = useReorderPages();
