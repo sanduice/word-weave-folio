@@ -16,6 +16,7 @@ import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table
 import { SlashCommandMenu } from "./editor/SlashCommandMenu";
 import { TableToolbar } from "./editor/TableToolbar";
 import { BubbleMenuToolbar } from "./editor/BubbleMenuToolbar";
+import { StickyToolbar } from "./editor/StickyToolbar";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +60,21 @@ export function PageEditor() {
       Table.configure({ resizable: false }),
       TableRow,
       TableHeader,
-      TableCell,
+      TableCell.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            backgroundColor: {
+              default: null,
+              parseHTML: (el) => (el as HTMLElement).style.backgroundColor || null,
+              renderHTML: (attrs) => {
+                if (!attrs.backgroundColor) return {};
+                return { style: `background-color: ${attrs.backgroundColor}` };
+              },
+            },
+          };
+        },
+      }),
     ],
     content: "",
     editorProps: {
@@ -180,7 +195,17 @@ export function PageEditor() {
   }
 
   return (
-    <div className="flex-1 overflow-auto" ref={containerRef}>
+    <div className="flex-1 flex flex-col overflow-auto" ref={containerRef}>
+      {/* Sticky formatting toolbar — always visible when editing */}
+      {editor && (
+        <StickyToolbar
+          editor={editor}
+          onLinkClick={(existingUrl) => {
+            setLinkUrl(existingUrl);
+            setLinkDialogOpen(true);
+          }}
+        />
+      )}
       <div className="max-w-3xl mx-auto px-6 py-8 relative">
         {/* Save status */}
         <div className="flex justify-end mb-2">

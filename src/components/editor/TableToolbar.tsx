@@ -6,6 +6,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   RowsIcon,
   Rows2,
@@ -16,6 +17,8 @@ import {
   Split,
   LayoutList,
   TableIcon,
+  Eraser,
+  PaintBucket,
 } from "lucide-react";
 
 interface TableToolbarProps {
@@ -195,13 +198,24 @@ export function TableToolbar({ editor, containerRef }: TableToolbarProps) {
     },
   ];
 
+  const CELL_COLORS = [
+    { label: "None", value: null },
+    { label: "Red", value: "#fee2e2" },
+    { label: "Orange", value: "#ffedd5" },
+    { label: "Yellow", value: "#fef9c3" },
+    { label: "Green", value: "#dcfce7" },
+    { label: "Teal", value: "#ccfbf1" },
+    { label: "Blue", value: "#dbeafe" },
+    { label: "Purple", value: "#f3e8ff" },
+    { label: "Grey", value: "#f3f4f6" },
+  ];
+
   return (
     <TooltipProvider delayDuration={400}>
       <div
         ref={toolbarRef}
         className="table-toolbar"
         style={{ top: position.top, left: position.left }}
-        // Prevent toolbar clicks from blurring the editor
         onMouseDown={(e) => e.preventDefault()}
       >
         {groups.map((group, gi) => (
@@ -229,6 +243,76 @@ export function TableToolbar({ editor, containerRef }: TableToolbarProps) {
             })}
           </div>
         ))}
+
+        {/* Cell background color group */}
+        <div className="table-toolbar-divider" />
+        <div className="table-toolbar-group">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    className="table-toolbar-btn"
+                    aria-label="Cell background color"
+                  >
+                    <PaintBucket className="h-3.5 w-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="p-0 w-auto"
+                  sideOffset={6}
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                >
+                  <div className="p-2 grid grid-cols-3 gap-1" style={{ width: 116 }}>
+                    {CELL_COLORS.map((c) => (
+                      <button
+                        key={c.label}
+                        title={c.label}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          editor
+                            .chain()
+                            .focus()
+                            .setCellAttribute("backgroundColor", c.value)
+                            .run();
+                        }}
+                        className="w-8 h-8 rounded hover:scale-110 transition-transform flex items-center justify-center"
+                        style={{
+                          background: c.value ?? "transparent",
+                          border: c.value
+                            ? "1px solid hsl(var(--border))"
+                            : "1px dashed hsl(var(--muted-foreground))",
+                        }}
+                      >
+                        {!c.value && (
+                          <span className="text-muted-foreground text-xs">∅</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Cell background color
+            </TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                className="table-toolbar-btn"
+                onClick={() => editor.chain().focus().clearContent().run()}
+                aria-label="Clear cell content"
+              >
+                <Eraser className="h-3.5 w-3.5" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="text-xs">
+              Clear cell content
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </div>
     </TooltipProvider>
   );
