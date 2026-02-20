@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -27,8 +27,6 @@ import { useSession, useProfile, useLogout } from "@/hooks/use-auth";
 import { SpaceSelector } from "./SpaceSelector";
 import { FolderTree } from "./FolderTree";
 import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp } from "lucide-react";
-import { useRef } from "react";
-import { useReorderFolders } from "@/hooks/use-folders";
 
 const displayTitle = (title: string) => title?.trim() || "Untitled";
 
@@ -39,19 +37,18 @@ export function AppSidebar() {
   const { data: folders } = useFolders(selectedSpaceId ?? undefined);
   const { data: favorites } = useFavoritePages();
   const reorder = useReorderPages();
-  const reorderFolders = useReorderFolders();
   const { user } = useSession();
   const { data: profile } = useProfile(user?.id);
   const logout = useLogout();
   const createPage = useCreatePage();
   const createFolder = useCreateFolder();
 
-  // Auto-select first space
-  useState(() => {
+  // Auto-select first space once data loads
+  useEffect(() => {
     if (!selectedSpaceId && spaces && spaces.length > 0) {
       setSelectedSpaceId(spaces[0].id);
     }
-  });
+  }, [spaces, selectedSpaceId, setSelectedSpaceId]);
 
   // Favorites drag state
   const [favLocalOrder, setFavLocalOrder] = useState<string[] | null>(null);
