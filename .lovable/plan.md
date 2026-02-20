@@ -1,209 +1,227 @@
 
-# Google Authentication — Implementation Plan
+# Folder System — Implementation Plan
 
-## Overview
+## Current State Analysis
 
-This plan adds Google OAuth sign-in to the app, introduces a user-scoped data model so every space and page is owned by the signed-in user, and adds a clean login screen and authenticated header. The Lovable Cloud managed Google OAuth is used — no Google Cloud Console setup is required from you.
+The app currently has:
+- **Spaces** as top-level containers (no `folder_id` column)
+- **Pages** with `parent_id` (self-referential) — the existing tree is a page-nesting system, NOT a true folder system
+- `PageTree` renders page hierarchy by `parent_id`, with drag-to-reorder using `sort_order`
+- No dedicated `folders` table exists
 
----
-
-## What Changes and Why
-
-The current app has no authentication. All data in the database (spaces, pages) is shared and accessible to everyone because RLS policies currently allow full anonymous access. After this implementation:
-
-- Every user signs in with Google (one click)
-- Spaces and pages are tied to the user's ID
-- RLS policies are tightened so each user only sees their own data
-- A new `profiles` table stores name and avatar from Google
-- A protected route guard redirects unauthenticated visitors to the login page
-- The sidebar footer gains a user avatar + logout dropdown
+The key architectural decision: **The existing `parent_id` on pages is currently used to nest pages under other pages.** The folder system is a distinct concept — folders are containers, not content. This plan introduces a proper `folders` table and adds a `folder_id` foreign key to `pages`, while keeping `parent_id` for page-to-page nesting intact (pages can still be nested inside each other within a folder).
 
 ---
 
-## Architecture Overview
+## Architecture Decision
 
 ```text
-App.tsx
- ├─ /login         → LoginPage (public)
- └─ /              → AuthGuard → Index (protected)
-                        ├─ AppSidebar (+ user avatar footer)
-                        ├─ TopBar
-                        └─ PageEditor
+Space
+ └─ Folder (folder_id = null → root level)
+     ├─ Page (folder_id = folder.id)
+     ├─ Page (folder_id = folder.id)
+     └─ Folder (parent_folder_id = parent.id)
+         └─ Page (folder_id = nested_folder.id)
 ```
 
-The `AuthGuard` component listens to the auth session. If the session is null it redirects to `/login`. If it exists it renders children.
+The sidebar tree will render a **unified tree** of folders and pages mixed together, sorted by `sort_order`. Items with `folder_id = null` and `parent_id = null` are at the space root level.
 
 ---
 
-## Database Changes (Migration Required)
+## Database Changes (Migration)
 
-### 1. Add `user_id` column to `spaces` and `pages`
-
-```sql
--- spaces
-ALTER TABLE public.spaces ADD COLUMN user_id uuid;
-UPDATE public.spaces SET user_id = '00000000-0000-0000-0000-000000000000'; -- placeholder
-ALTER TABLE public.spaces ALTER COLUMN user_id SET NOT NULL;
-
--- pages (already has space_id → user_id derived via space, but direct column is cleaner for RLS)
-ALTER TABLE public.pages ADD COLUMN user_id uuid;
-UPDATE public.pages SET user_id = '00000000-0000-0000-0000-000000000000';
-ALTER TABLE public.pages ALTER COLUMN user_id SET NOT NULL;
-```
-
-> After migration, existing rows get a placeholder UUID. Once you sign in for the first time, a new space will be created under your real user ID. The old placeholder rows will not be visible to you (RLS filters them out) — they can be cleaned up manually or ignored.
-
-### 2. Add `profiles` table
+### New `folders` table
 
 ```sql
-CREATE TABLE public.profiles (
-  id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email text,
-  full_name text,
-  avatar_url text,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+CREATE TABLE public.folders (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  space_id uuid NOT NULL REFERENCES public.spaces(id) ON DELETE CASCADE,
+  parent_folder_id uuid REFERENCES public.folders(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL,
+  name text NOT NULL DEFAULT 'New Folder',
+  sort_order integer,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.folders ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies
+CREATE POLICY folders_select ON public.folders FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY folders_insert ON public.folders FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY folders_update ON public.folders FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY folders_delete ON public.folders FOR DELETE USING (auth.uid() = user_id);
+
+-- updated_at trigger
+CREATE TRIGGER folders_updated_at
+  BEFORE UPDATE ON public.folders
+  FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 ```
 
-A database trigger auto-creates a profile row on every new sign-up using the `raw_user_meta_data` from Google (name, avatar_url, email).
+### Add `folder_id` to `pages` table
 
-### 3. Update RLS policies
+```sql
+ALTER TABLE public.pages ADD COLUMN folder_id uuid REFERENCES public.folders(id) ON DELETE SET NULL;
+```
 
-**Spaces:**
-- Drop the current permissive ALL policy
-- Add: `SELECT/INSERT/UPDATE/DELETE` where `user_id = auth.uid()`
-
-**Pages:**
-- Drop the current permissive ALL policy
-- Add: `SELECT/INSERT/UPDATE/DELETE` where `user_id = auth.uid()`
-
-**Profiles:**
-- `SELECT` where `id = auth.uid()`
-- `UPDATE` where `id = auth.uid()`
-
-**page_links and recent_pages:**
-- These can be scoped via join to pages (owned by user) — the simplest MVP approach is to keep the existing permissive policies on these tables and rely on the pages RLS to prevent cross-user data leaks.
+Pages without a folder (`folder_id = NULL`) appear at the space root level, same as today. This is backward-compatible — no existing page data breaks.
 
 ---
 
-## New Files
+## Files Overview
+
+### New Files
 
 | File | Purpose |
 |---|---|
-| `src/pages/LoginPage.tsx` | Full-page Google sign-in screen |
-| `src/components/AuthGuard.tsx` | Route protection component |
-| `src/hooks/use-auth.ts` | Session state, profile, logout hook |
+| `src/hooks/use-folders.ts` | All folder CRUD hooks |
+| `src/components/FolderTree.tsx` | Unified folder + page tree renderer |
+| `src/components/FolderItem.tsx` | Single folder row with context menu, inline rename, drag/drop |
 
----
+### Modified Files
 
-## Modified Files
-
-| File | Change |
+| File | What Changes |
 |---|---|
-| `src/App.tsx` | Add `/login` route; wrap `/` with `AuthGuard` |
-| `src/components/AppSidebar.tsx` | Replace footer version text with user avatar + logout dropdown |
-| `src/hooks/use-spaces.ts` | Inject `user_id: user.id` into `useCreateSpace` insert |
-| `src/hooks/use-pages.ts` | Inject `user_id: user.id` into `useCreatePage` insert |
+| `src/components/AppSidebar.tsx` | Replace `PageTree` with `FolderTree`; add "New Folder" button next to "New Page" in header |
+| `src/hooks/use-pages.ts` | Add `folder_id` to `useCreatePage`, `useUpdatePage`; update `useSearchPages` to include folder path |
+| `src/stores/app-store.ts` | No changes required — `selectedPageId` / `selectedSpaceId` are sufficient |
+| `src/integrations/supabase/types.ts` | Auto-regenerated after migration |
 
 ---
 
 ## Detailed Implementation
 
-### `src/pages/LoginPage.tsx`
-
-Clean centered card with:
-- App logo/icon and name ("Notespace")
-- One-liner tagline
-- "Continue with Google" button using `lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin })`
-- Subtle footer with "By continuing, you agree to our Terms and Privacy Policy"
-
-No email/password fields — exactly as specified.
-
-### `src/components/AuthGuard.tsx`
-
-```tsx
-// Subscribes to onAuthStateChange
-// While loading → show full-page spinner
-// If session → render children
-// If no session → <Navigate to="/login" />
-```
-
-Sets up the auth listener BEFORE calling `getSession()` per the auth implementation rules.
-
-### `src/hooks/use-auth.ts`
+### 1. `src/hooks/use-folders.ts`
 
 Exports:
-- `useSession()` — returns `{ session, user, loading }`
-- `useProfile()` — fetches from `profiles` table for current user
-- `useLogout()` — calls `supabase.auth.signOut()` and clears query cache
+- `useFolders(spaceId)` — fetches all folders for a space ordered by `sort_order`
+- `useCreateFolder()` — insert with `user_id`, `space_id`, optional `parent_folder_id`
+- `useUpdateFolder()` — rename, move (change `parent_folder_id`), reorder (`sort_order`)
+- `useDeleteFolder()` — cascades via DB (ON DELETE CASCADE for child folders, ON DELETE SET NULL for pages)
+- `useReorderFolders()` — batch update `sort_order` for optimistic drag reordering
 
-### `src/App.tsx` changes
+### 2. `src/components/FolderTree.tsx`
 
-```tsx
-<Routes>
-  <Route path="/login" element={<LoginPage />} />
-  <Route path="/" element={<AuthGuard><Index /></AuthGuard>} />
-  <Route path="*" element={<NotFound />} />
-</Routes>
+This replaces `PageTree` as the sidebar content renderer. It renders a **mixed tree** of folders and pages at each level:
+
+```text
+Root level (folder_id = null AND parent_id = null):
+  📁 Pre-Start Materials   ← folder
+  📄 Getting Started       ← page (folder_id = null)
+  
+Inside a folder (folder_id = folder.id):
+  📁 Week 1               ← nested folder
+  📄 Day 1 Notes          ← page
 ```
 
-### `src/components/AppSidebar.tsx` footer changes
+The component recursively renders using:
+- `folders.filter(f => f.parent_folder_id === currentFolderId)`  
+- `pages.filter(p => p.folder_id === currentFolderId && !p.parent_id)`
 
-Replace `<p className="text-[10px]...">Notespace v1</p>` with:
+Both folders and pages share the same `sort_order` integer for mixed ordering. Drop targets handle both types.
 
-```tsx
-<DropdownMenu>
-  <DropdownMenuTrigger>
-    <div className="flex items-center gap-2 p-2 rounded hover:bg-sidebar-accent cursor-pointer w-full">
-      <Avatar className="h-7 w-7">
-        <AvatarImage src={profile?.avatar_url} />
-        <AvatarFallback>{profile?.full_name?.[0] ?? "U"}</AvatarFallback>
-      </Avatar>
-      <div className="flex-1 min-w-0 text-left">
-        <p className="text-xs font-medium truncate">{profile?.full_name ?? "User"}</p>
-        <p className="text-[10px] text-muted-foreground truncate">{profile?.email}</p>
-      </div>
-    </div>
-  </DropdownMenuTrigger>
-  <DropdownMenuContent>
-    <DropdownMenuItem onClick={logout}>Log out</DropdownMenuItem>
-  </DropdownMenuContent>
-</DropdownMenu>
+### 3. `src/components/FolderItem.tsx`
+
+A single folder row with:
+
+**Visual anatomy:**
+```
+[grip] [▶] [📁] Folder Name    [⋯]
 ```
 
-### `use-spaces.ts` and `use-pages.ts` changes
+**States:**
+- Collapsed / expanded via `Collapsible`
+- Inline rename: clicking the name or selecting "Rename" from context menu replaces the label with an `<input>`, Enter saves, Esc cancels
+- Drop indicator: `border-t-2` or `border-b-2` on drag-over (sibling reorder), OR a blue background highlight when hovering to drop INTO the folder
 
-In `useCreateSpace` and `useCreatePage`, inject `user_id` from the current session:
+**Context menu (on `⋯` hover or right-click):**
+- Add Page (creates page with `folder_id = this folder's id`)
+- Add Folder (creates child folder with `parent_folder_id = this folder's id`)
+- Rename
+- Move to... (opens a popover listing other folders in the same space)
+- --- separator ---
+- Delete (opens confirmation dialog)
+
+**Delete confirmation dialog:**
+> "Deleting **[Folder Name]** will permanently delete all its sub-folders. Pages inside will be moved to the space root."
+>
+> Buttons: **Delete** | **Cancel**
+
+Note: The DB `ON DELETE CASCADE` handles child folders. `ON DELETE SET NULL` on `pages.folder_id` moves pages to root automatically — no orphan pages.
+
+### 4. Drag & Drop System
+
+The existing page drag system uses `draggedId` refs and `sort_order` updates. The folder system extends this with a **drag type** so you know what's being dragged:
 
 ```ts
-const { data: { user } } = await supabase.auth.getUser();
-supabase.from("spaces").insert({ ...space, user_id: user.id })
+// In dataTransfer
+e.dataTransfer.setData("type", "folder" | "page");
+e.dataTransfer.setData("id", item.id);
 ```
 
+**Drop zones:**
+- **Before/after** a folder or page → sibling reorder (updates `sort_order`)
+- **Into** a folder (center zone, highlighted differently) → reparent (updates `folder_id` on page or `parent_folder_id` on folder)
+
+**Circular nesting guard:**
+Before updating `parent_folder_id`, walk the ancestor chain from the target folder upward. If the dragged folder's ID appears in that chain, reject the drop silently.
+
+### 5. `useCreatePage` update in `use-pages.ts`
+
+Add `folder_id?: string | null` to the mutation parameter. When a page is created from inside a folder context menu, the `folder_id` is passed. When created from the sidebar root `+ New Page` button, `folder_id` remains `null`.
+
+### 6. AppSidebar changes
+
+- Replace `<PageTree>` with `<FolderTree>`
+- Pass both `folders` (from `useFolders`) and `pages` (from `usePages`) as props
+- Add a `+ New Folder` button next to the section label, alongside the existing `+ New Page` button
+
+### 7. Search Dialog update (`SearchDialog.tsx`)
+
+Enhance results to show folder path:
+
+```
+📄 Day 1 Notes
+   📘 My Space › 📁 Initial Batch › 📁 Week 1
+```
+
+The `useSearchPages` query will join with folders to construct the path. In MVP: show `folder.name` if `folder_id` is set, plus the space name.
+
 ---
 
-## Corner Cases Handled
+## Edge Cases Handled
 
-| Case | Handling |
+| Case | Solution |
 |---|---|
-| User navigates directly to `/` while unauthenticated | `AuthGuard` redirects to `/login` |
-| User navigates to `/login` while already signed in | `LoginPage` detects existing session and redirects to `/` |
-| Google OAuth popup blocked | Not applicable — redirect-based OAuth flow used, not popup |
-| OAuth callback returns to `/` | Lovable Cloud handles the `/~oauth` callback automatically; session is restored via `onAuthStateChange` |
-| Existing anonymous data (old rows with placeholder user_id) | Not visible to the signed-in user — RLS filters them out. No data loss; can be cleaned up via backend console |
-| Profile not yet created when app renders | `useProfile()` returns `null` gracefully; avatar shows initial letter fallback |
-| User signs out in another tab | `onAuthStateChange` fires in all tabs, `AuthGuard` redirects to login everywhere |
-| `useCreateSpace` / `useCreatePage` called before user session loads | `AuthGuard` prevents rendering the app until session is confirmed, so `user` is always defined inside protected routes |
-| Token auto-refresh | Supabase client handles this automatically (`autoRefreshToken: true` already set in `client.ts`) |
-| Profile picture from Google is a URL that expires | Stored as URL in profiles table; Supabase avatar URLs from Google are long-lived. No special handling needed for MVP |
+| Delete folder with nested folders | `ON DELETE CASCADE` on `folders.parent_folder_id` — all descendants deleted |
+| Delete folder with pages inside | `ON DELETE SET NULL` on `pages.folder_id` — pages moved to space root, no data loss |
+| Circular drag (drop folder into itself or descendant) | Walk ancestor chain before confirming drop; reject silently with no UI change |
+| Inline rename of currently-selected folder | Local optimistic update in sidebar; DB update confirmed in background |
+| Drag a page from a folder to root | Set `folder_id = null` on the page |
+| Page nested under another page (existing `parent_id` nesting) | These pages are only shown when their parent page is expanded — `folder_id` on the parent page determines which folder they appear under |
+| Existing pages (no `folder_id`) | `folder_id = NULL` → they render at space root level, matching current behavior exactly. Zero data migration needed |
+| New page created from folder context menu | `folder_id` is passed to `useCreatePage`; page immediately appears inside that folder |
+| Folder collapse state across refresh | Stored in `localStorage` keyed by `folderId`, restored on mount |
+| Very deep nesting (>7 levels) | UI allows it (no hard DB limit); visually indented with overflow truncation and `title` tooltip on the name |
 
 ---
 
-## What is NOT included (per spec)
+## Implementation Sequence
 
-- No email/password auth
-- No GitHub or other OAuth providers
-- No anonymous-to-Google data migration (existing data is placeholder-owned and invisible; new sign-in starts fresh)
-- No team/org accounts
-- No Privacy Policy / Terms of Service pages (can be added separately)
+1. **Database migration** — create `folders` table + add `folder_id` to `pages`
+2. **`use-folders.ts`** — all CRUD hooks
+3. **`use-pages.ts`** — add `folder_id` support to `useCreatePage`, `useUpdatePage`
+4. **`FolderItem.tsx`** — single folder row component with context menu, inline rename, drag/drop
+5. **`FolderTree.tsx`** — recursive mixed tree renderer
+6. **`AppSidebar.tsx`** — wire up `FolderTree`, add "New Folder" button
+7. **`SearchDialog.tsx`** — add folder path to results
+
+---
+
+## What Is NOT Changing
+
+- The existing `parent_id` on pages (page-under-page nesting) is preserved unchanged
+- `PageEditor`, `TopBar`, `BubbleMenuToolbar`, `SlashCommandMenu` — untouched
+- Auth system, RLS policies for existing tables — untouched
+- Spaces system — untouched
+- Favorites — untouched (favorites are page-level, not folder-level)
