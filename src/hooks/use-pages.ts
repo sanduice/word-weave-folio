@@ -36,7 +36,7 @@ export function usePage(pageId: string | undefined) {
 export function useCreatePage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (page: Omit<TablesInsert<"pages">, "user_id">) => {
+    mutationFn: async (page: Omit<TablesInsert<"pages">, "user_id"> & { folder_id?: string | null }) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
       const { data, error } = await supabase
@@ -56,7 +56,7 @@ export function useCreatePage() {
 export function useUpdatePage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; title?: string; content?: string; is_favorite?: boolean; parent_id?: string | null; sort_order?: number }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; title?: string; content?: string; is_favorite?: boolean; parent_id?: string | null; sort_order?: number; folder_id?: string | null }) => {
       const { data, error } = await supabase.from("pages").update(updates).eq("id", id).select().single();
       if (error) throw error;
       return data as Page;
@@ -132,7 +132,7 @@ export function useSearchPages() {
     mutationFn: async (query: string) => {
       const { data, error } = await supabase
         .from("pages")
-        .select("id, title, content, space_id, spaces(name, icon)")
+        .select("id, title, content, space_id, folder_id, spaces(name, icon), folders(name)")
         .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
         .limit(20);
       if (error) throw error;

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,11 +20,15 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useSpaces } from "@/hooks/use-spaces";
 import { usePages, useFavoritePages, useReorderPages } from "@/hooks/use-pages";
+import { useFolders, useCreateFolder } from "@/hooks/use-folders";
+import { useCreatePage } from "@/hooks/use-pages";
 import { useAppStore } from "@/stores/app-store";
 import { useSession, useProfile, useLogout } from "@/hooks/use-auth";
 import { SpaceSelector } from "./SpaceSelector";
-import { PageTree } from "./PageTree";
-import { Star, FileText, GripVertical, LogOut, ChevronUp } from "lucide-react";
+import { FolderTree } from "./FolderTree";
+import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp } from "lucide-react";
+import { useRef } from "react";
+import { useReorderFolders } from "@/hooks/use-folders";
 
 const displayTitle = (title: string) => title?.trim() || "Untitled";
 
@@ -32,11 +36,15 @@ export function AppSidebar() {
   const { selectedSpaceId, setSelectedSpaceId, setSelectedPageId, selectedPageId } = useAppStore();
   const { data: spaces } = useSpaces();
   const { data: pages } = usePages(selectedSpaceId ?? undefined);
+  const { data: folders } = useFolders(selectedSpaceId ?? undefined);
   const { data: favorites } = useFavoritePages();
   const reorder = useReorderPages();
+  const reorderFolders = useReorderFolders();
   const { user } = useSession();
   const { data: profile } = useProfile(user?.id);
   const logout = useLogout();
+  const createPage = useCreatePage();
+  const createFolder = useCreateFolder();
 
   // Auto-select first space
   useState(() => {
@@ -44,8 +52,6 @@ export function AppSidebar() {
       setSelectedSpaceId(spaces[0].id);
     }
   });
-
-  const rootPages = pages ? pages.filter((p) => !p.parent_id) : [];
 
   // Favorites drag state
   const [favLocalOrder, setFavLocalOrder] = useState<string[] | null>(null);
@@ -104,6 +110,20 @@ export function AppSidebar() {
     favDraggedId.current = null;
   }
 
+  function handleNewPage() {
+    if (!selectedSpaceId) return;
+    createPage.mutate({ space_id: selectedSpaceId, title: "" }, {
+      onSuccess: (page) => setSelectedPageId(page.id),
+    });
+  }
+
+  function handleNewFolder() {
+    if (!selectedSpaceId) return;
+    createFolder.mutate({ space_id: selectedSpaceId });
+  }
+
+  const isEmpty = !pages?.length && !folders?.length;
+
   return (
     <Sidebar className="border-r border-sidebar-border">
       <SidebarHeader className="px-4 py-4">
@@ -128,26 +148,40 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Page tree */}
+        {/* Pages + Folders tree */}
         <SidebarGroup className="flex-1">
-          <div className="flex items-center justify-between px-2">
+          <div className="flex items-center justify-between px-2 pr-1">
             <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground/60 px-0">
               Pages
             </SidebarGroupLabel>
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={handleNewPage}
+                title="New page"
+                className="p-1 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <FilePlus className="h-3.5 w-3.5" />
+              </button>
+              <button
+                onClick={handleNewFolder}
+                title="New folder"
+                className="p-1 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <FolderPlus className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
           <SidebarGroupContent>
-            {rootPages.length === 0 ? (
+            {isEmpty ? (
               <p className="px-4 py-2 text-xs text-muted-foreground">No pages yet</p>
             ) : (
-              <SidebarMenu>
-                <PageTree
-                  pages={pages ?? []}
-                  rootPages={rootPages}
-                  selectedPageId={selectedPageId}
-                  onSelect={setSelectedPageId}
-                  depth={0}
-                />
-              </SidebarMenu>
+              <FolderTree
+                folders={folders ?? []}
+                pages={pages ?? []}
+                selectedPageId={selectedPageId}
+                onSelectPage={setSelectedPageId}
+                spaceId={selectedSpaceId ?? ""}
+              />
             )}
           </SidebarGroupContent>
         </SidebarGroup>
