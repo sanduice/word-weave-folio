@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          parent_folder_id: string | null
+          sort_order: number | null
+          space_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name?: string
+          parent_folder_id?: string | null
+          sort_order?: number | null
+          space_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          parent_folder_id?: string | null
+          sort_order?: number | null
+          space_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "folders_parent_folder_id_fkey"
+            columns: ["parent_folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "folders_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       page_links: {
         Row: {
           created_at: string
@@ -54,6 +102,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          folder_id: string | null
           id: string
           is_favorite: boolean
           parent_id: string | null
@@ -66,6 +115,7 @@ export type Database = {
         Insert: {
           content?: string
           created_at?: string
+          folder_id?: string | null
           id?: string
           is_favorite?: boolean
           parent_id?: string | null
@@ -78,6 +128,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          folder_id?: string | null
           id?: string
           is_favorite?: boolean
           parent_id?: string | null
@@ -88,6 +139,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "pages_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "folders"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "pages_parent_id_fkey"
             columns: ["parent_id"]

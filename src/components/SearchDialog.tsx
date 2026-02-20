@@ -3,7 +3,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useSearchPages } from "@/hooks/use-pages";
 import { useAppStore } from "@/stores/app-store";
-import { FileText, Search } from "lucide-react";
+import { FileText, Folder, Search } from "lucide-react";
 
 export function SearchDialog() {
   const { searchOpen, setSearchOpen, setSelectedSpaceId, setSelectedPageId } = useAppStore();
@@ -51,23 +51,34 @@ export function SearchDialog() {
             <p className="text-sm text-muted-foreground text-center py-8">Searching...</p>
           ) : searchPages.data && searchPages.data.length > 0 ? (
             <div className="space-y-0.5">
-              {searchPages.data.map((result: any) => (
-                <button
-                  key={result.id}
-                  onClick={() => handleSelect(result)}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left hover:bg-accent transition-colors"
-                >
-                  <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium truncate">{result.title}</p>
-                    {result.spaces && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {(result.spaces as any).icon} {(result.spaces as any).name}
+              {searchPages.data.map((result: any) => {
+                const spaceName = result.spaces?.name;
+                const spaceIcon = result.spaces?.icon;
+                const folderName = result.folders?.name;
+                return (
+                  <button
+                    key={result.id}
+                    onClick={() => handleSelect(result)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left hover:bg-accent transition-colors"
+                  >
+                    <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{result.title || "Untitled"}</p>
+                      <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                        {spaceIcon && <span>{spaceIcon}</span>}
+                        {spaceName && <span>{spaceName}</span>}
+                        {folderName && (
+                          <>
+                            <span className="mx-0.5">›</span>
+                            <Folder className="h-3 w-3 shrink-0" />
+                            <span>{folderName}</span>
+                          </>
+                        )}
                       </p>
-                    )}
-                  </div>
-                </button>
-              ))}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-8">No results found</p>
