@@ -11,14 +11,24 @@ export function InlineCommentPopover({ position, onSubmit, onCancel }: InlineCom
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onCancel();
-      }
+    if (!position) return;
+    // Delay listener to avoid the same mousedown that opened the popover
+    const timer = setTimeout(() => {
+      const handler = (e: MouseEvent) => {
+        if (ref.current && !ref.current.contains(e.target as Node)) {
+          onCancel();
+        }
+      };
+      document.addEventListener("mousedown", handler);
+      // Store cleanup
+      (ref as any)._cleanup = () => document.removeEventListener("mousedown", handler);
+    }, 100);
+
+    return () => {
+      clearTimeout(timer);
+      (ref as any)._cleanup?.();
     };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [onCancel]);
+  }, [position, onCancel]);
 
   if (!position) return null;
 
