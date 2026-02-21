@@ -1,122 +1,181 @@
 
 
-# Page Context Menu & Title Truncation
+# Page Icon and Cover Image System (Notion-style)
 
 ## Overview
 
-Add a hover-triggered action menu (three-dot "more" button) to each page item in the sidebar, with Duplicate, Rename, and Delete options. Also ensure page titles never wrap to multiple lines.
+Add the ability for users to personalize pages with emoji icons and cover images, matching the Notion-style UX shown in the reference screenshots. When hovering near the page title, "Add icon" and "Add cover" buttons appear. Icons display as large emoji next to the title, covers display as full-width banners above the page content.
 
-## Current State
+## Database Changes
 
-- Page titles already use `truncate` CSS class, but the parent container doesn't constrain width properly with `min-w-0`, so long titles can push the layout.
-- No action menu exists on page items currently.
-- `useDeletePage` and `useCreatePage` hooks already exist in `use-pages.ts`.
-- No dedicated duplicate hook exists yet.
+Add 5 new columns to the `pages` table:
 
-## What to Build
+| Column | Type | Default | Purpose |
+|---|---|---|---|
+| `icon_type` | text | null | "emoji" or "upload" |
+| `icon_value` | text | null | Emoji character or storage URL |
+| `cover_type` | text | null | "gallery", "upload", or "link" |
+| `cover_url` | text | null | Image URL for the cover |
+| `cover_position_y` | real | 0.5 | Vertical focal point (0-1) for repositioning |
 
-### 1. Three-dot action menu on hover (ContextMenu pattern)
+Also create a `page-assets` storage bucket (public) for uploaded icons and covers, with RLS policies allowing authenticated users to upload/read/delete their own files.
 
-Each page item in the sidebar will show a small "..." (MoreHorizontal) icon button on hover, aligned to the right. Clicking it opens a dropdown with:
+## New Components
 
-- **Rename** -- Turns the title into an inline editable input field. On blur or Enter, saves via `useUpdatePage`.
-- **Duplicate** -- Creates a copy of the page (same title + " (copy)", same content, same space/folder/parent). Selects the new page after creation.
-- **Delete** -- Deletes the page with a confirmation. If the deleted page was selected, clears `selectedPageId`.
+### 1. `src/components/editor/PageIconCoverControls.tsx`
 
-### 2. Title single-line enforcement
+Renders above the title input in PageEditor:
+- On hover/focus near the title area, shows "+ Add icon" and "+ Add cover" ghost buttons (like Notion screenshot 1)
+- If icon exists: shows the large emoji (or uploaded image) to the left of the title; clicking it reopens the picker
+- If cover exists: shows full-width cover banner (240px height) above the title area with "Change | Reposition | Remove" controls on hover
 
-Add `min-w-0` and `overflow-hidden` to the flex container so `truncate` works correctly on deeply nested or long titles.
+### 2. `src/components/editor/EmojiPicker.tsx`
 
-## Files to Modify
+A popover with:
+- **Emoji tab** (default): searchable grid of emojis organized by category (People, Nature, Food, Activities, Travel, Objects, Symbols, Flags). Uses a static emoji dataset bundled in the component
+- **Remove tab**: button to clear the icon (only shown when icon exists)
+- Clicking an emoji instantly saves it and closes the picker
+- Search/filter input at the top
 
-| File | Changes |
-|---|---|
-| `src/components/PageTree.tsx` | Add MoreHorizontal button on hover, dropdown menu with Rename/Duplicate/Delete, inline rename state, and fix title overflow |
-| `src/hooks/use-pages.ts` | Add `useDuplicatePage` hook that fetches the source page and inserts a copy |
+### 3. `src/components/editor/CoverPicker.tsx`
 
-## Detailed Design
+A popover/panel with tabs:
+- **Gallery tab**: grid of ~12 pre-curated gradient/abstract cover images (CSS gradients stored as data, no external dependencies)
+- **Upload tab**: file input for JPG/PNG/WebP up to 5MB, uploads to `page-assets` bucket
+- **Link tab**: paste an image URL, preview before applying
+- **Remove**: clears the cover
 
-### `use-pages.ts` -- New `useDuplicatePage` Hook
+### 4. `src/components/editor/CoverReposition.tsx`
+
+When user clicks "Reposition" on the cover:
+- Cover enters drag mode (cursor changes to grab)
+- User drags vertically to adjust the focal point
+- On mouse release, saves the `cover_position_y` value
+- "Save position" button confirms
+
+## Changes to Existing Files
+
+### `src/hooks/use-pages.ts`
+
+- Update `useUpdatePage` mutation to accept `icon_type`, `icon_value`, `cover_type`, `cover_url`, `cover_position_y` fields
+- Update `useDuplicatePage` to copy icon and cover fields
+
+### `src/components/PageEditor.tsx`
+
+- Import and render `PageIconCoverControls` above the title input
+- Pass page data and update handlers
+- Cover banner renders above the `max-w-3xl` content container (full width)
+- Icon renders inline with the title
+
+### Layout structure when both icon and cover are present:
+
+```text
++--------------------------------------------------+
+|  [Cover image, full-width, 240px, object-position]|
+|                      [Change] [Reposition] [Remove]|
++--------------------------------------------------+
+|     max-w-3xl container                           |
+|                                                   |
+|  [Icon emoji, ~64px]                              |
+|  [Page Title input .........................]     |
+|  [Editor content .............................]   |
++--------------------------------------------------+
+```
+
+When only icon (no cover): icon sits above the title, overlapping nothing.
+When only cover (no icon): cover at top, title below.
+When neither: just the title as today, with hover triggers.
+
+## Emoji Data
+
+Bundle a static array of ~500 common emojis organized by category. No external API or npm package needed. Example structure:
 
 ```typescript
-export function useDuplicatePage() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async (pageId: string) => {
-      const { data: source } = await supabase.from("pages").select("*").eq("id", pageId).single();
-      const { data: user } = await supabase.auth.getUser();
-      const { data, error } = await supabase.from("pages").insert({
-        space_id: source.space_id,
-        title: (source.title?.trim() || "Untitled") + " (copy)",
-        content: source.content,
-        parent_id: source.parent_id,
-        folder_id: source.folder_id,
-        user_id: user.data.user.id,
-      }).select().single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      qc.invalidateQueries({ queryKey: ["pages", data.space_id] });
-    },
-  });
-}
+const EMOJI_DATA = {
+  "People": ["😀", "😃", "😄", ...],
+  "Nature": ["🌸", "🌺", "🌻", ...],
+  // ...
+};
 ```
 
-### `PageTree.tsx` -- Changes to `PageTreeItem`
+## Gallery Covers
 
-**New props passed down from `PageTree`:**
-- `onDuplicate(pageId)` -- calls `useDuplicatePage` then selects the new page
-- `onDelete(pageId)` -- calls `useDeletePage`, clears selection if needed
-- `onRename(pageId, newTitle)` -- calls `useUpdatePage`
+Use CSS gradients as pre-curated gallery options (no external images needed):
 
-**New local state in `PageTreeItem`:**
-- `isRenaming: boolean` -- when true, shows an input instead of the title span
-- `renameValue: string` -- the current input value
-
-**UI structure change (per page item):**
-
-```
-[GripVertical] [Chevron?] [FileText] [Title...] [MoreHorizontal (hover-only)]
+```typescript
+const GALLERY_COVERS = [
+  { id: "gradient-1", label: "Sunset", css: "linear-gradient(135deg, #f093fb, #f5576c)" },
+  { id: "gradient-2", label: "Ocean", css: "linear-gradient(135deg, #4facfe, #00f2fe)" },
+  // ~12 options
+];
 ```
 
-The MoreHorizontal button appears via `opacity-0 group-hover:opacity-100` and opens a `DropdownMenu` with:
-- Rename (Pencil icon) -- sets `isRenaming = true`, focuses input
-- Duplicate (Copy icon) -- calls `onDuplicate(page.id)`
-- Delete (Trash2 icon, destructive red) -- shows confirmation dialog, then calls `onDelete(page.id)`
+For gallery covers, `cover_type = "gallery"` and `cover_url` stores the gradient CSS string. For uploads, `cover_url` stores the storage public URL.
 
-**Inline rename behavior:**
-- Input replaces the title span
-- Auto-focused on mount
-- On Enter or blur: save via `onRename(page.id, renameValue)`, exit rename mode
-- On Escape: cancel, restore original title, exit rename mode
+## Storage Bucket Setup (SQL migration)
 
-**Title overflow fix:**
-- Add `min-w-0 overflow-hidden` to the outer flex div of each page item
-- Ensure the `SidebarMenuButton` has `min-w-0` so the truncate on the inner span works
+```sql
+-- Create page-assets bucket
+INSERT INTO storage.buckets (id, name, public) VALUES ('page-assets', 'page-assets', true);
 
-### Delete confirmation
+-- RLS: authenticated users can upload to their own folder
+CREATE POLICY "Users can upload page assets"
+ON storage.objects FOR INSERT TO authenticated
+WITH CHECK (bucket_id = 'page-assets' AND (storage.foldername(name))[1] = auth.uid()::text);
 
-Use an `AlertDialog` from the existing UI components to confirm deletion. The dialog says "Delete [page title]?" with "This action cannot be undone." message and Cancel/Delete buttons.
+CREATE POLICY "Anyone can view page assets"
+ON storage.objects FOR SELECT TO authenticated
+USING (bucket_id = 'page-assets');
+
+CREATE POLICY "Users can delete own page assets"
+ON storage.objects FOR DELETE TO authenticated
+USING (bucket_id = 'page-assets' AND (storage.foldername(name))[1] = auth.uid()::text);
+```
+
+Upload path pattern: `{user_id}/icons/{page_id}.{ext}` or `{user_id}/covers/{page_id}.{ext}`
 
 ## Implementation Sequence
 
-1. Add `useDuplicatePage` hook to `use-pages.ts`
-2. Update `PageTree.tsx`:
-   a. Add imports for hooks, DropdownMenu, AlertDialog, MoreHorizontal/Copy/Pencil/Trash2 icons
-   b. Add `onDuplicate`, `onDelete`, `onRename` handlers in `PageTree` component using the hooks
-   c. Pass handlers to `PageTreeItem`
-   d. Add rename state, dropdown menu, and delete confirmation to `PageTreeItem`
-   e. Fix overflow with `min-w-0`
-3. No CSS file changes needed -- all styling via Tailwind classes
+1. **Database migration**: Add 5 columns to `pages` table + create storage bucket with RLS
+2. **Emoji data file**: `src/components/editor/emoji-data.ts` -- static emoji dataset
+3. **EmojiPicker component**: searchable emoji grid popover
+4. **CoverPicker component**: gallery/upload/link tabs popover
+5. **CoverReposition component**: drag-to-reposition interaction
+6. **PageIconCoverControls component**: orchestrates icon + cover display and triggers
+7. **Update PageEditor.tsx**: integrate the controls into the page layout
+8. **Update use-pages.ts**: extend update/duplicate hooks for new fields
 
 ## Edge Cases
 
 | Case | Handling |
 |---|---|
-| Delete the currently selected page | Clear `selectedPageId` to null after deletion |
-| Rename to empty string | Save as empty -- sidebar already shows "Untitled" for blank titles |
-| Duplicate a page with children | Only duplicates the page itself, not its children (keeps it simple) |
-| Click "more" button while dragging | The button is inside the drag container but uses `stopPropagation` on click to prevent drag interference |
-| Rename while another rename is active | Only one rename at a time per item (local state) |
+| Broken cover URL (link tab) | Show fallback placeholder with "Replace" option |
+| Upload fails | Show toast error, don't save |
+| Page duplication | Copy icon/cover metadata; for uploaded files, reference same URL (no re-upload) |
+| Delete page with uploaded assets | Assets remain in storage (cleanup is a future enhancement) |
+| Cover + icon together | Icon overlaps bottom of cover by ~32px (negative margin), similar to Notion |
+| Very long title with icon | Icon stays fixed size (64px), title wraps normally |
+| Mobile/small viewport | Cover height reduces to 160px, icon to 48px |
+
+## Files Summary
+
+| File | Action |
+|---|---|
+| `pages` table (migration) | Add 5 columns |
+| `storage.buckets` (migration) | Create `page-assets` bucket + RLS |
+| `src/components/editor/emoji-data.ts` | New -- static emoji dataset |
+| `src/components/editor/EmojiPicker.tsx` | New -- emoji picker popover |
+| `src/components/editor/CoverPicker.tsx` | New -- cover picker with gallery/upload/link |
+| `src/components/editor/CoverReposition.tsx` | New -- drag repositioning |
+| `src/components/editor/PageIconCoverControls.tsx` | New -- orchestrator component |
+| `src/components/PageEditor.tsx` | Modify -- integrate icon/cover UI |
+| `src/hooks/use-pages.ts` | Modify -- extend update/duplicate for new fields |
+
+## Explicit Non-Goals (v1)
+
+- No animated or video covers
+- No Unsplash integration
+- No icon display in sidebar (future enhancement)
+- No custom icon upload (emoji only for v1 -- upload tab shown but phase 2)
+- No cover image in print/export
 
