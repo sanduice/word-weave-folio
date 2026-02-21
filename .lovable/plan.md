@@ -1,98 +1,146 @@
 
 
-# Fix: Page Titles Going Blank — Root Cause & Solution
+# Fix: Page Title Overwriting on Page Switch During Pending Save
 
-## Root Cause Analysis
+## Root Cause
 
-There are **two related bugs**, both stemming from a single stale closure issue in `PageEditor.tsx`.
+The bug is a **race condition** between the debounced save timer and page switching. Here is the exact sequence:
 
-### Bug 1: Title blanks out automatically after typing in the editor
+### Scenario: User renames Page A, then clicks Page B before save completes
 
-In `PageEditor.tsx` line 94, the TipTap `onUpdate` callback captures `title` from the React state closure:
+1. User renames Page A to "New Name A"
+2. `scheduleSave("New Name A", htmlA)` fires, sets a 1500ms timer (closure captures `selectedPageId = A`)
+3. User clicks Page B **within 1500ms**
+4. `selectedPageId` changes to B, `scheduleSave` is recreated with new closure
+5. Page B data loads -- the effect runs:
+   - `setTitle("Page B Title")` -- queued (async state update, not yet rendered)
+   - `lastSavedTitle.current = "Page B Title"`
+   - `lastSavedContent.current = contentB`
+   - `editor.commands.setContent(contentB)` -- this may trigger `onUpdate`
+6. **Problem A**: If `setContent` triggers `onUpdate`, it calls the NEW `scheduleSave` (closure B) with `titleRef.current` -- but `titleRef` still holds "New Name A" because `setTitle` hasn't rendered yet. So it schedules saving `{ id: B, title: "New Name A" }` -- **overwriting Page B's title with Page A's name**.
+7. **Problem B**: The OLD timer from step 2 fires and saves correctly to page A, but then overwrites `lastSavedTitle.current = "New Name A"` and `lastSavedContent.current = htmlA`. These shared refs now hold page A's data while the user is on page B, corrupting future comparisons.
 
-```typescript
-onUpdate: ({ editor }) => {
-  scheduleSave(title, editor.getHTML());  // <-- `title` is STALE here
-},
-```
+### Two bugs in one
 
-TipTap's `useEditor` hook creates the editor instance **once** and does **not** re-bind `onUpdate` when the component re-renders. So `title` inside this closure is permanently stuck at its initial value (`""` from `useState("")`).
-
-**What happens:**
-1. User opens a page -- title loads as "My Page"
-2. User starts typing in the editor body
-3. `onUpdate` fires with `title = ""` (the stale initial value)
-4. `scheduleSave("", editorHTML)` runs
-5. After 1.5s debounce, it sees `"" !== lastSavedTitle.current ("My Page")`, so it saves `title: ""` to the database
-6. The page title is now blank in the database
-7. Sidebar refetches and shows "Untitled"
-
-### Bug 2: Title lost during drag-and-drop
-
-When a page is dragged, `useUpdatePage.mutate()` is called (to update `folder_id`/`parent_id`). Its `onSuccess` invalidates the `["pages", spaceId]` query, which triggers a refetch. If Bug 1 already saved an empty title (or if the auto-save timer fires during the drag operation), the refetched data comes back with a blank title.
-
-Additionally, `useReorderPages` calls `Promise.all` with individual `update({ sort_order })` calls. Each of these returns no `.select()`, so they don't trigger per-page cache updates -- but the `onSuccess` invalidates `["pages"]` broadly, causing a refetch that picks up the already-corrupted blank title.
+| Bug | Cause | Effect |
+|---|---|---|
+| Pending timer not cancelled on page switch | No cleanup effect for `selectedPageId` change | Old timer corrupts shared refs after completing |
+| `titleRef` stale during page load | `setTitle()` is async, `titleRef` updates on render, but `setContent` may trigger `onUpdate` before render | Page A's title is saved to Page B |
 
 ## Solution
 
-### Fix 1: Use a ref for title in the `onUpdate` callback (core fix)
+### Fix 1: Cancel pending save and flush on page switch
 
-Store the current title in a `useRef` that stays in sync with the state, and read from the ref inside `onUpdate`:
+Add a `useEffect` that runs when `selectedPageId` changes to:
+- Clear any pending save timer
+- Reset save status
 
-**File: `src/components/PageEditor.tsx`**
+This prevents the old page's timer from firing after the user has moved to a new page.
+
+### Fix 2: Guard saves with page ID check
+
+Store the target page ID directly in the `setTimeout` closure (not via ref or `useCallback` closure). Before executing the save, verify the page ID still matches `selectedPageId`. If not, skip the ref updates.
+
+### Fix 3: Update refs BEFORE calling setContent
+
+In the page load effect, update `titleRef` synchronously (via the ref directly) before calling `editor.commands.setContent()`, so if `onUpdate` fires, it reads the correct title.
+
+## File to Modify
+
+`src/components/PageEditor.tsx` -- approximately 10 lines changed.
+
+## Detailed Changes
+
+### Change 1: Add page-switch cleanup effect (new, after line 120)
 
 ```typescript
-// Add a ref that always holds the latest title
-const titleRef = useRef(title);
-titleRef.current = title;  // sync on every render
-
-// In useEditor config:
-onUpdate: ({ editor }) => {
-  scheduleSave(titleRef.current, editor.getHTML());  // reads latest title
-},
+// Cancel pending save when switching pages
+useEffect(() => {
+  return () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = undefined;
+    }
+  };
+}, [selectedPageId]);
 ```
 
-This ensures the `onUpdate` closure always accesses the current title value, not the stale initial one.
+This ensures any in-flight debounced save from the old page is cancelled when the user navigates away.
 
-### Fix 2: Guard against saving empty title over a non-empty one
-
-Add a safety check in `scheduleSave` to prevent overwriting a known good title with an empty string:
+### Change 2: Update titleRef before setContent in the load effect (modify lines 109-120)
 
 ```typescript
-// Inside scheduleSave, before saving:
-if (newTitle === "" && lastSavedTitle.current !== "") {
-  // Don't overwrite a real title with empty -- likely stale closure
-  newTitle = lastSavedTitle.current;
-}
+useEffect(() => {
+  if (page && editor) {
+    setTitle(page.title);
+    titleRef.current = page.title;  // <-- sync ref IMMEDIATELY, before setContent
+    lastSavedTitle.current = page.title;
+    const content = page.content || "";
+    lastSavedContent.current = content;
+    if (editor.getHTML() !== content) {
+      editor.commands.setContent(content || "");
+    }
+    setSaveStatus("saved");
+  }
+}, [page?.id, page?.content, page?.title]);
 ```
 
-This is a defensive backstop in case any other closure issue arises.
+The key addition is `titleRef.current = page.title` right after `setTitle()`. This ensures that if `setContent` triggers `onUpdate`, `titleRef.current` already holds the new page's title, not the old page's title.
 
-### Fix 3: Update the `useEditor` dependency for `scheduleSave`
+### Change 3: Capture page ID in setTimeout and guard ref updates (modify scheduleSave)
 
-The `scheduleSave` callback itself has a dependency on `updatePage` in its `useCallback` deps. Since `updatePage` is a new object each render (from `useMutation`), this causes `scheduleSave` to be recreated, which is fine. But the `onUpdate` in `useEditor` still doesn't re-bind. The ref approach (Fix 1) solves this definitively.
+```typescript
+const scheduleSave = useCallback(
+  (newTitle: string, newContent: string) => {
+    if (!selectedPageId) return;
+    const targetPageId = selectedPageId; // capture at call time
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    setSaveStatus("saving");
+    saveTimerRef.current = setTimeout(async () => {
+      // If user switched pages, abort -- don't save or update refs
+      if (useAppStore.getState().selectedPageId !== targetPageId) {
+        return;
+      }
+      const safeTitle = (newTitle === "" && lastSavedTitle.current !== "") 
+        ? lastSavedTitle.current : newTitle;
+      const updates: any = {};
+      if (safeTitle !== lastSavedTitle.current) updates.title = safeTitle;
+      if (newContent !== lastSavedContent.current) updates.content = newContent;
+      if (Object.keys(updates).length === 0) {
+        setSaveStatus("saved");
+        return;
+      }
+      await updatePage.mutateAsync({ id: targetPageId, ...updates });
+      // Only update refs if still on the same page
+      if (useAppStore.getState().selectedPageId === targetPageId) {
+        lastSavedTitle.current = safeTitle;
+        lastSavedContent.current = newContent;
+        setSaveStatus("saved");
+      }
+    }, 1500);
+  },
+  [selectedPageId, updatePage],
+);
+```
 
-## Files to Modify
-
-| File | Change |
-|---|---|
-| `src/components/PageEditor.tsx` | Add `titleRef`, update `onUpdate` to use `titleRef.current`, add empty-title guard in `scheduleSave` |
-
-No other files need changes. The drag-and-drop code itself is correct -- the title corruption is caused by the editor's `onUpdate` saving stale data, not by the reorder logic.
-
-## Implementation Details
-
-Only `PageEditor.tsx` changes, approximately 5 lines modified:
-
-1. Add `const titleRef = useRef(title);` after the existing `title` state declaration
-2. Add `titleRef.current = title;` to keep it synced on each render
-3. Change line 95 from `scheduleSave(title, ...)` to `scheduleSave(titleRef.current, ...)`
-4. Add the empty-title guard inside `scheduleSave` before the update call
+Key changes:
+- `targetPageId` is captured at call time, not read from closure during timeout
+- Before saving, check if the user is still on the same page via `useAppStore.getState()`
+- After saving, only update shared refs if still on the target page -- prevents ref corruption
 
 ## What Is NOT Changing
 
-- `FolderTree.tsx`, `PageTree.tsx` -- drag-and-drop logic is correct
-- `use-pages.ts` -- mutation and query hooks are correct
-- `AppSidebar.tsx`, `TopBar.tsx` -- untouched
+- `use-pages.ts` -- hooks are correct
+- `BubbleMenuToolbar.tsx`, `StickyToolbar.tsx`, `TableToolbar.tsx` -- untouched
+- `AppSidebar.tsx`, sidebar page tree -- untouched
 - Database schema -- no migration needed
+
+## Edge Cases Handled
+
+| Case | Solution |
+|---|---|
+| User renames page A, clicks page B quickly | Timer cancelled by cleanup effect; even if it fires, the page ID check aborts it |
+| `setContent` triggers `onUpdate` during page load | `titleRef.current` is updated synchronously before `setContent`, so `onUpdate` reads the correct title |
+| User edits page B after switching from A | Refs are not corrupted because old timer either was cancelled or skipped ref updates |
+| Rapid page switching (A to B to C) | Each switch cancels the previous timer; the page ID guard prevents stale saves |
 
