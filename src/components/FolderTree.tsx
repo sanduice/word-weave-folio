@@ -1,13 +1,29 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { SidebarMenuItem, SidebarMenuButton, SidebarMenu } from "@/components/ui/sidebar";
-import { ChevronRight, FileText, GripVertical } from "lucide-react";
-import { useState } from "react";
+import { ChevronRight, FileText, GripVertical, MoreHorizontal, Pencil, Copy, Trash2 } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FolderItem, type DragState } from "./FolderItem";
 import type { Folder } from "@/hooks/use-folders";
 import { useReorderFolders, useUpdateFolder } from "@/hooks/use-folders";
-import { useReorderPages, useUpdatePage } from "@/hooks/use-pages";
+import { useReorderPages, useUpdatePage, useDeletePage, useDuplicatePage } from "@/hooks/use-pages";
 import type { Page } from "@/hooks/use-pages";
+import { useAppStore } from "@/stores/app-store";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const displayTitle = (title: string) => title?.trim() || "Untitled";
 
@@ -190,10 +206,61 @@ function PageItem({
 }) {
   const [open, setOpen] = useState(true);
   const [dropState, setDropState] = useState<"before" | "after" | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(page.title);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const updatePage = useUpdatePage();
+  const deletePage = useDeletePage();
+  const duplicatePage = useDuplicatePage();
+  const setSelectedPageId = useAppStore((s) => s.setSelectedPageId);
 
   const children = pages.filter((p) => p.parent_id === page.id);
   const hasChildren = children.length > 0;
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [isRenaming]);
+
+  function startRename() {
+    setRenameValue(page.title);
+    setIsRenaming(true);
+  }
+
+  function commitRename() {
+    setIsRenaming(false);
+    if (renameValue !== page.title) {
+      updatePage.mutate({ id: page.id, title: renameValue });
+    }
+  }
+
+  function cancelRename() {
+    setIsRenaming(false);
+    setRenameValue(page.title);
+  }
+
+  function handleDuplicate() {
+    duplicatePage.mutate(page.id, {
+      onSuccess: (newPage) => {
+        setSelectedPageId(newPage.id);
+        onSelectPage(newPage.id);
+      },
+    });
+  }
+
+  function handleDelete() {
+    const isSelected = useAppStore.getState().selectedPageId === page.id;
+    deletePage.mutate(page.id, {
+      onSuccess: () => {
+        if (isSelected) setSelectedPageId(null);
+      },
+    });
+  }
 
   function getPos(e: React.DragEvent, el: HTMLElement): "before" | "after" {
     const rect = el.getBoundingClientRect();
@@ -243,11 +310,82 @@ function PageItem({
 
   const titleEmpty = !page.title?.trim();
 
+  const titleContent = isRenaming ? (
+    <input
+      ref={renameInputRef}
+      value={renameValue}
+      onChange={(e) => setRenameValue(e.target.value)}
+      onBlur={commitRename}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commitRename();
+        if (e.key === "Escape") cancelRename();
+      }}
+      className="text-sm bg-transparent border border-border rounded px-1 py-0 w-full outline-none focus:ring-1 focus:ring-ring min-w-0"
+      onClick={(e) => e.stopPropagation()}
+    />
+  ) : (
+    <span className={`truncate ${titleEmpty ? "italic text-muted-foreground/50" : ""}`} title={page.title}>
+      {displayTitle(page.title)}
+    </span>
+  );
+
+  const actionMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="p-0.5 rounded opacity-0 group-hover/page-item:opacity-100 hover:bg-sidebar-accent shrink-0 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="right" align="start" className="w-36">
+        <DropdownMenuItem onClick={() => startRename()}>
+          <Pencil className="h-3.5 w-3.5 mr-2" />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handleDuplicate()}>
+          <Copy className="h-3.5 w-3.5 mr-2" />
+          Duplicate
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => setShowDeleteDialog(true)}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-2" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const deleteDialog = (
+    <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete "{displayTitle(page.title)}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete this page.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDelete}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   const rowContent = (
     <div
       ref={itemRef}
-      className={`flex items-center w-full group rounded ${dropCls}`}
-      draggable
+      className={`flex items-center w-full group/page-item rounded min-w-0 ${dropCls}`}
+      draggable={!isRenaming}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -255,7 +393,7 @@ function PageItem({
       onDragEnd={handleDragEnd}
       style={{ paddingLeft: depth > 0 ? `${depth * 8}px` : undefined }}
     >
-      <span className="p-1 opacity-0 group-hover:opacity-40 cursor-grab shrink-0">
+      <span className="p-1 opacity-0 group-hover/page-item:opacity-40 cursor-grab shrink-0">
         <GripVertical className="h-3 w-3" />
       </span>
       {hasChildren ? (
@@ -269,42 +407,49 @@ function PageItem({
       )}
       <SidebarMenuButton
         isActive={selectedPageId === page.id}
-        onClick={() => onSelectPage(page.id)}
-        className="text-sm flex-1"
+        onClick={() => !isRenaming && onSelectPage(page.id)}
+        className="text-sm flex-1 min-w-0 w-auto overflow-hidden"
       >
         <FileText className="h-3.5 w-3.5 shrink-0" />
-        <span className={`truncate ${titleEmpty ? "italic text-muted-foreground/50" : ""}`} title={page.title}>
-          {displayTitle(page.title)}
-        </span>
+        {titleContent}
       </SidebarMenuButton>
+      {actionMenu}
     </div>
   );
 
   if (hasChildren) {
     return (
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <SidebarMenuItem>{rowContent}</SidebarMenuItem>
-        <CollapsibleContent>
-          <div className="ml-4 border-l border-sidebar-border pl-1">
-            <SidebarMenu>
-              {children.map((child) => (
-                <PageItem
-                  key={child.id}
-                  page={child}
-                  pages={pages}
-                  selectedPageId={selectedPageId}
-                  onSelectPage={onSelectPage}
-                  depth={depth + 1}
-                  dragState={dragState}
-                  onReorder={onReorder}
-                />
-              ))}
-            </SidebarMenu>
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+      <>
+        {deleteDialog}
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <SidebarMenuItem>{rowContent}</SidebarMenuItem>
+          <CollapsibleContent>
+            <div className="ml-4 border-l border-sidebar-border pl-1">
+              <SidebarMenu>
+                {children.map((child) => (
+                  <PageItem
+                    key={child.id}
+                    page={child}
+                    pages={pages}
+                    selectedPageId={selectedPageId}
+                    onSelectPage={onSelectPage}
+                    depth={depth + 1}
+                    dragState={dragState}
+                    onReorder={onReorder}
+                  />
+                ))}
+              </SidebarMenu>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </>
     );
   }
 
-  return <SidebarMenuItem>{rowContent}</SidebarMenuItem>;
+  return (
+    <>
+      {deleteDialog}
+      <SidebarMenuItem>{rowContent}</SidebarMenuItem>
+    </>
+  );
 }
