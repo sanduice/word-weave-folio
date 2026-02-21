@@ -18,6 +18,11 @@ import { SlashCommandMenu } from "./editor/SlashCommandMenu";
 import { TableToolbar } from "./editor/TableToolbar";
 import { BubbleMenuToolbar } from "./editor/BubbleMenuToolbar";
 import { StickyToolbar } from "./editor/StickyToolbar";
+import { CommentHighlight } from "./editor/comment-mark";
+import { CommentPanel } from "./comments/CommentPanel";
+import { InlineCommentPopover } from "./comments/InlineCommentPopover";
+import { useCreateComment } from "@/hooks/use-comments";
+import { useSession } from "@/hooks/use-auth";
 import {
   Dialog,
   DialogContent,
@@ -29,11 +34,13 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 export function PageEditor() {
-  const { selectedPageId, setSelectedPageId, selectedSpaceId } = useAppStore();
+  const { selectedPageId, setSelectedPageId, selectedSpaceId, commentPanelOpen, setCommentPanelOpen, setActiveCommentId } = useAppStore();
   const { data: page, isLoading } = usePage(selectedPageId ?? undefined);
   const { data: backlinks } = useBacklinks(selectedPageId ?? undefined);
   const updatePage = useUpdatePage();
   const trackOpen = useTrackPageOpen();
+  const createComment = useCreateComment();
+  const { user } = useSession();
   const [title, setTitle] = useState("");
   const titleRef = useRef(title);
   titleRef.current = title;
@@ -44,12 +51,13 @@ export function PageEditor() {
   const lastSavedTitle = useRef<string>("");
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
+  const [commentPopoverPos, setCommentPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number; text: string } | null>(null);
 
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3, 4, 5, 6] },
-        // StarterKit v3 bundles link — disable so we configure it separately
         link: false,
       }),
       Placeholder.configure({ placeholder: "Start writing... (use / for commands)" }),
@@ -60,6 +68,7 @@ export function PageEditor() {
       Color,
       Highlight.configure({ multicolor: true }),
       SlashCommandExtension,
+      CommentHighlight,
       Table.configure({ resizable: false }),
       TableRow,
       TableHeader,
@@ -85,11 +94,22 @@ export function PageEditor() {
         class: "prose prose-sm max-w-none focus:outline-none min-h-[60vh] px-0 py-2",
       },
       handleKeyDown: (_view, event) => {
-        // Cmd+` for inline code
         if ((event.metaKey || event.ctrlKey) && event.key === "`") {
           event.preventDefault();
           editor?.chain().focus().toggleCode().run();
           return true;
+        }
+        return false;
+      },
+      handleClick: (_view, _pos, event) => {
+        const target = event.target as HTMLElement;
+        const commentSpan = target.closest("[data-comment-id]");
+        if (commentSpan) {
+          const commentId = commentSpan.getAttribute("data-comment-id");
+          if (commentId) {
+            setActiveCommentId(commentId);
+            setCommentPanelOpen(true);
+          }
         }
         return false;
       },
@@ -110,7 +130,7 @@ export function PageEditor() {
   useEffect(() => {
     if (page && editor) {
       setTitle(page.title);
-      titleRef.current = page.title; // sync ref IMMEDIATELY, before setContent
+      titleRef.current = page.title;
       lastSavedTitle.current = page.title;
       const content = page.content || "";
       lastSavedContent.current = content;
@@ -134,14 +154,11 @@ export function PageEditor() {
   const scheduleSave = useCallback(
     (newTitle: string, newContent: string) => {
       if (!selectedPageId) return;
-      const targetPageId = selectedPageId; // capture at call time
+      const targetPageId = selectedPageId;
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       setSaveStatus("saving");
       saveTimerRef.current = setTimeout(async () => {
-        // If user switched pages, abort
-        if (useAppStore.getState().selectedPageId !== targetPageId) {
-          return;
-        }
+        if (useAppStore.getState().selectedPageId !== targetPageId) return;
         const safeTitle = (newTitle === "" && lastSavedTitle.current !== "") ? lastSavedTitle.current : newTitle;
         const updates: any = {};
         if (safeTitle !== lastSavedTitle.current) updates.title = safeTitle;
@@ -151,7 +168,6 @@ export function PageEditor() {
           return;
         }
         await updatePage.mutateAsync({ id: targetPageId, ...updates });
-        // Only update refs if still on the same page
         if (useAppStore.getState().selectedPageId === targetPageId) {
           lastSavedTitle.current = safeTitle;
           lastSavedContent.current = newContent;
@@ -172,7 +188,6 @@ export function PageEditor() {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        // If editor is focused, open link dialog
         if (editor?.isFocused) {
           const existingUrl = editor.getAttributes("link").href || "";
           setLinkUrl(existingUrl);
@@ -195,6 +210,72 @@ export function PageEditor() {
     }
     setLinkDialogOpen(false);
     setLinkUrl("");
+  };
+
+  const handleCommentClick = () => {
+    if (!editor) return;
+    const { from, to } = editor.state.selection;
+    if (from === to) return;
+    const text = editor.state.doc.textBetween(from, to, " ");
+    setPendingSelection({ from, to, text });
+
+    // Position popover near selection
+    const coords = editor.view.coordsAtPos(from);
+    const editorRect = containerRef.current?.getBoundingClientRect();
+    if (editorRect) {
+      setCommentPopoverPos({
+        top: coords.top - editorRect.top + 24,
+        left: coords.left - editorRect.left,
+      });
+    }
+  };
+
+  const handleCommentSubmit = async (content: string) => {
+    if (!editor || !pendingSelection || !selectedPageId || !user) return;
+    const { from, to, text } = pendingSelection;
+
+    const result = await createComment.mutateAsync({
+      page_id: selectedPageId,
+      content,
+      selected_text: text,
+      user_id: user.id,
+    });
+
+    // Apply mark
+    editor.chain().focus().setTextSelection({ from, to }).setMark("commentHighlight", {
+      commentId: result.id,
+      status: "open",
+    }).run();
+
+    // Trigger save
+    scheduleSave(titleRef.current, editor.getHTML());
+
+    setCommentPopoverPos(null);
+    setPendingSelection(null);
+    setCommentPanelOpen(true);
+  };
+
+  const handleCommentPanelClick = (commentId: string) => {
+    if (!editor) return;
+    // Find the mark in editor and scroll to it
+    const { doc } = editor.state;
+    let found = false;
+    doc.descendants((node, pos) => {
+      if (found) return false;
+      const marks = node.marks.filter((m) => m.type.name === "commentHighlight" && m.attrs.commentId === commentId);
+      if (marks.length > 0) {
+        editor.chain().focus().setTextSelection(pos).run();
+        // Scroll to the element
+        const dom = editor.view.domAtPos(pos);
+        if (dom.node instanceof HTMLElement) {
+          dom.node.scrollIntoView({ behavior: "smooth", block: "center" });
+        } else if (dom.node.parentElement) {
+          dom.node.parentElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        found = true;
+        return false;
+      }
+    });
   };
 
   if (!selectedPageId) {
@@ -231,7 +312,7 @@ export function PageEditor() {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Fixed formatting toolbar — always visible at top */}
+      {/* Fixed formatting toolbar */}
       {editor && (
         <StickyToolbar
           editor={editor}
@@ -241,106 +322,131 @@ export function PageEditor() {
           }}
         />
       )}
-      <div className="flex-1 flex flex-col overflow-auto" ref={containerRef}>
 
-      {/* Page icon & cover controls */}
-      {page && (
-        <PageIconCoverControls
-          pageId={page.id}
-          iconType={(page as any).icon_type ?? null}
-          iconValue={(page as any).icon_value ?? null}
-          coverType={(page as any).cover_type ?? null}
-          coverUrl={(page as any).cover_url ?? null}
-          coverPositionY={(page as any).cover_position_y ?? 0.5}
-          onUpdateIcon={handleUpdateIcon}
-          onUpdateCover={handleUpdateCover}
-        />
-      )}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Main editor area */}
+        <div className="flex-1 flex flex-col overflow-auto" ref={containerRef}>
+          {/* Page icon & cover controls */}
+          {page && (
+            <PageIconCoverControls
+              pageId={page.id}
+              iconType={(page as any).icon_type ?? null}
+              iconValue={(page as any).icon_value ?? null}
+              coverType={(page as any).cover_type ?? null}
+              coverUrl={(page as any).cover_url ?? null}
+              coverPositionY={(page as any).cover_position_y ?? 0.5}
+              onUpdateIcon={handleUpdateIcon}
+              onUpdateCover={handleUpdateCover}
+            />
+          )}
 
-      <div className="max-w-3xl mx-auto px-6 py-8 relative w-full">
-        {/* Save status */}
-        <div className="flex justify-end mb-2">
-          <span className="text-[11px] text-muted-foreground/60">
-            {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : ""}
-          </span>
+          <div className="max-w-3xl mx-auto px-6 py-8 relative w-full">
+            {/* Save status */}
+            <div className="flex justify-end mb-2">
+              <span className="text-[11px] text-muted-foreground/60">
+                {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : ""}
+              </span>
+            </div>
+
+            {/* Title */}
+            <input
+              value={title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              className="w-full text-3xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/30 mb-4"
+              placeholder="Untitled"
+            />
+
+            {/* Editor */}
+            <EditorContent editor={editor} />
+
+            {/* Bubble menu toolbar */}
+            {editor && (
+              <BubbleMenuToolbar
+                editor={editor}
+                onLinkClick={(existingUrl) => {
+                  setLinkUrl(existingUrl);
+                  setLinkDialogOpen(true);
+                }}
+                onCommentClick={handleCommentClick}
+              />
+            )}
+
+            {/* Table toolbar */}
+            {editor && <TableToolbar editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
+
+            {/* Slash command menu */}
+            {editor && <SlashCommandMenu editor={editor} />}
+
+            {/* Inline comment popover */}
+            <InlineCommentPopover
+              position={commentPopoverPos}
+              onSubmit={handleCommentSubmit}
+              onCancel={() => {
+                setCommentPopoverPos(null);
+                setPendingSelection(null);
+              }}
+            />
+
+            {/* Link dialog */}
+            <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Insert Link</DialogTitle>
+                </DialogHeader>
+                <Input
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://..."
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } }}
+                  autoFocus
+                />
+                <DialogFooter>
+                  <Button variant="ghost" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={applyLink}>Apply</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+
+            {/* Backlinks */}
+            {backlinks && backlinks.length > 0 && (
+              <div className="mt-12 pt-6 border-t border-border">
+                <h4 className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-3 flex items-center gap-1.5">
+                  <Link2 className="h-3 w-3" />
+                  Referenced in
+                </h4>
+                <div className="space-y-1">
+                  {backlinks.map((link) => {
+                    const fromPage = link.pages as any;
+                    return (
+                      <button
+                        key={link.from_page_id}
+                        onClick={() => {
+                          if (fromPage?.space_id) useAppStore.getState().setSelectedSpaceId(fromPage.space_id);
+                          setSelectedPageId(link.from_page_id);
+                        }}
+                        className="flex items-center gap-2 text-sm text-primary hover:underline"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        {fromPage?.title || "Unknown page"}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Title */}
-        <input
-          value={title}
-          onChange={(e) => handleTitleChange(e.target.value)}
-          className="w-full text-3xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/30 mb-4"
-          placeholder="Untitled"
-        />
-
-        {/* Editor */}
-        <EditorContent editor={editor} />
-
-        {/* Bubble menu toolbar — appears on text selection */}
-        {editor && (
-          <BubbleMenuToolbar
-            editor={editor}
-            onLinkClick={(existingUrl) => {
-              setLinkUrl(existingUrl);
-              setLinkDialogOpen(true);
-            }}
+        {/* Comment panel */}
+        {commentPanelOpen && selectedPageId && user && (
+          <CommentPanel
+            pageId={selectedPageId}
+            userId={user.id}
+            editorHtml={editor?.getHTML() || ""}
+            onCommentClick={handleCommentPanelClick}
+            onClose={() => setCommentPanelOpen(false)}
           />
         )}
-
-        {/* Table toolbar — floats above the active table */}
-        {editor && <TableToolbar editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
-
-        {/* Slash command menu */}
-        {editor && <SlashCommandMenu editor={editor} />}
-
-        {/* Link dialog */}
-        <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Insert Link</DialogTitle>
-            </DialogHeader>
-            <Input
-              value={linkUrl}
-              onChange={(e) => setLinkUrl(e.target.value)}
-              placeholder="https://..."
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } }}
-              autoFocus
-            />
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
-              <Button onClick={applyLink}>Apply</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* Backlinks */}
-        {backlinks && backlinks.length > 0 && (
-          <div className="mt-12 pt-6 border-t border-border">
-            <h4 className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-3 flex items-center gap-1.5">
-              <Link2 className="h-3 w-3" />
-              Referenced in
-            </h4>
-            <div className="space-y-1">
-              {backlinks.map((link) => {
-                const fromPage = link.pages as any;
-                return (
-                  <button
-                    key={link.from_page_id}
-                    onClick={() => {
-                      if (fromPage?.space_id) useAppStore.getState().setSelectedSpaceId(fromPage.space_id);
-                      setSelectedPageId(link.from_page_id);
-                    }}
-                    className="flex items-center gap-2 text-sm text-primary hover:underline"
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    {fromPage?.title || "Unknown page"}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
       </div>
     </div>
   );

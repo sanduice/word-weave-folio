@@ -14,6 +14,88 @@ export type Database = {
   }
   public: {
     Tables: {
+      comment_replies: {
+        Row: {
+          comment_id: string
+          content: string
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          comment_id: string
+          content: string
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          comment_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comment_replies_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      comments: {
+        Row: {
+          block_id: string | null
+          content: string
+          created_at: string
+          end_offset: number | null
+          id: string
+          page_id: string
+          selected_text: string | null
+          start_offset: number | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          block_id?: string | null
+          content: string
+          created_at?: string
+          end_offset?: number | null
+          id?: string
+          page_id: string
+          selected_text?: string | null
+          start_offset?: number | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          block_id?: string | null
+          content?: string
+          created_at?: string
+          end_offset?: number | null
+          id?: string
+          page_id?: string
+          selected_text?: string | null
+          start_offset?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       folders: {
         Row: {
           created_at: string

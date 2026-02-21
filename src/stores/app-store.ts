@@ -7,6 +7,10 @@ interface AppState {
   setSelectedPageId: (id: string | null) => void;
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
+  commentPanelOpen: boolean;
+  setCommentPanelOpen: (open: boolean) => void;
+  activeCommentId: string | null;
+  setActiveCommentId: (id: string | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -16,4 +20,8 @@ export const useAppStore = create<AppState>((set) => ({
   setSelectedPageId: (id) => set({ selectedPageId: id }),
   searchOpen: false,
   setSearchOpen: (open) => set({ searchOpen: open }),
+  commentPanelOpen: false,
+  setCommentPanelOpen: (open) => set({ commentPanelOpen: open }),
+  activeCommentId: null,
+  setActiveCommentId: (id) => set({ activeCommentId: id }),
 }));

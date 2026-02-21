@@ -462,3 +462,35 @@
 .sticky-dropdown-trigger:hover {
   background: hsl(var(--accent));
 }
+
+/* ── Comment Highlights ── */
+.comment-highlight[data-comment-status="open"] {
+  background-color: hsl(48 96% 89% / 0.8);
+  border-bottom: 2px solid hsl(48 96% 53%);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.comment-highlight[data-comment-status="open"]:hover {
+  background-color: hsl(48 96% 89%);
+}
+
+.comment-highlight[data-comment-status="resolved"] {
+  background-color: hsl(var(--muted) / 0.5);
+  border-bottom: 2px solid hsl(var(--border));
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.comment-highlight[data-comment-status="resolved"]:hover {
+  background-color: hsl(var(--muted));
+}
+
+/* ── Comment Panel ── */
+.comment-panel {
+  width: 320px;
+  min-width: 320px;
+  max-width: 320px;
+  height: 100%;
+  overflow: hidden;
+}

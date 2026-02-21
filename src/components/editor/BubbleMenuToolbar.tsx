@@ -15,6 +15,7 @@ import {
   Highlighter,
   Type,
   ChevronsUpDown,
+  MessageSquare,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -264,9 +265,10 @@ function MoreMenu({ editor }: { editor: Editor }) {
 interface BubbleMenuToolbarProps {
   editor: Editor;
   onLinkClick: (existingUrl: string) => void;
+  onCommentClick?: () => void;
 }
 
-export function BubbleMenuToolbar({ editor, onLinkClick }: BubbleMenuToolbarProps) {
+export function BubbleMenuToolbar({ editor, onLinkClick, onCommentClick }: BubbleMenuToolbarProps) {
   const currentColor = editor.getAttributes("textStyle")?.color as string | undefined;
   const currentHighlight = editor.getAttributes("highlight")?.color as string | undefined;
 
@@ -428,6 +430,16 @@ export function BubbleMenuToolbar({ editor, onLinkClick }: BubbleMenuToolbarProp
         </Popover>
 
         <Divider />
+
+        {/* Comment */}
+        {onCommentClick && (
+          <ToolBtn
+            title="Comment"
+            onClick={onCommentClick}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+          </ToolBtn>
+        )}
 
         {/* More menu */}
         <MoreMenu editor={editor} />
