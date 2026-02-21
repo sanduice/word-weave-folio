@@ -1,239 +1,100 @@
 
 
-# Inline Comments System (Notion-style)
+# Comment Box Layout and Selection Highlight Fixes
 
-## Overview
+## Problem Summary
 
-Add a full commenting system where users can select text, add comments, view them inline with highlights, and manage all comments from a right-side panel. Comments persist across sessions with text anchoring and support threading, resolution, and orphan detection.
+Three issues need to be addressed:
+1. **Selection highlight**: When selecting text in the editor, the selected text should show a yellow highlight (custom selection color) instead of the default browser blue selection.
+2. **Comment box positioning**: The comment input box currently appears as an absolute-positioned popover inside the editor. It should instead appear to the **right side** of the content area, aligned vertically with the top of the selected text (like Notion's approach shown in the screenshots).
+3. **Comment input scrolling**: The textarea in the comment box should show approximately 14-15 lines of text before adding a scrollbar, instead of growing infinitely.
 
-## Database Changes
+## Changes
 
-### Table: `comments`
+### 1. `src/index.css` -- Custom Selection Color
 
-| Column | Type | Default | Purpose |
-|---|---|---|---|
-| id | uuid | gen_random_uuid() | Primary key |
-| page_id | uuid | NOT NULL | FK to pages |
-| user_id | uuid | NOT NULL | Comment author |
-| content | text | NOT NULL | Comment body |
-| selected_text | text | NULL | Snapshot of highlighted text |
-| block_id | text | NULL | TipTap node ID for anchoring |
-| start_offset | integer | NULL | Character start offset |
-| end_offset | integer | NULL | Character end offset |
-| status | text | 'open' | 'open' or 'resolved' |
-| created_at | timestamptz | now() | |
-| updated_at | timestamptz | now() | |
+Add a CSS rule targeting `.tiptap ::selection` to change the browser's default blue selection to a yellow highlight color, matching the Notion-style appearance.
 
-### Table: `comment_replies`
+### 2. `src/components/PageEditor.tsx` -- Reposition Comment Popover
 
-| Column | Type | Default | Purpose |
-|---|---|---|---|
-| id | uuid | gen_random_uuid() | Primary key |
-| comment_id | uuid | NOT NULL | FK to comments |
-| user_id | uuid | NOT NULL | Reply author |
-| content | text | NOT NULL | Reply body |
-| created_at | timestamptz | now() | |
+Move the `InlineCommentPopover` out of the `max-w-3xl` content column and render it as a sibling positioned to the right of the editor content. The comment box will:
+- Float in the right margin area (outside the main content column)
+- Align its top edge with the top of the selected text
+- Use the full available right-side space (similar to how the comment panel works, but as a lightweight input)
 
-### RLS Policies
+The `handleCommentClick` function will be updated to calculate the `top` position relative to the scrollable container, so the popover aligns with the selected text vertically. The `left` positioning will be removed -- instead the popover will be placed using CSS to sit in the right margin.
 
-- SELECT: user can see comments on pages they own (`pages.user_id = auth.uid()`)
-- INSERT: user can comment on pages they own
-- UPDATE: comment author can update their own comments
-- DELETE: comment author or page owner can delete
-- Same pattern for `comment_replies`
+### 3. `src/components/comments/InlineCommentPopover.tsx` -- Layout and Scroll
 
-### Updated `at` trigger
+Update the popover component:
+- Change from `absolute` inside editor to a right-margin positioned element
+- Accept only a `top` value (no `left` needed since it always sits to the right)
+- Set the width to approximately 280-300px
 
-- Attach `update_updated_at_column` trigger to `comments` table
+### 4. `src/components/comments/CommentInput.tsx` -- Max Height with Scroll
 
-## TipTap Integration: Comment Mark
+Update the textarea to have a maximum height that accommodates roughly 14-15 lines of text (~280px at 14px line-height), after which a vertical scrollbar appears. Change from `resize-none` with no max-height to:
+- `max-h-[280px]` (approximately 14-15 lines)
+- `overflow-y: auto` for scrolling when content exceeds the limit
 
-A custom TipTap **Mark** extension called `commentHighlight` will be created. It stores a `commentId` attribute on the marked text, rendering it with a background highlight color:
+## Technical Details
 
-- **Open comment**: yellow background (`#fef9c3`)
-- **Resolved comment**: light grey background (`#f3f4f6`)
-- Clicking highlighted text opens the comment thread
-
-The mark is applied when creating a comment and removed when deleting. On page load, marks are already in the saved HTML content, so highlights persist automatically.
-
-## Architecture
-
-```text
-+------------------------------------------------------------------+
-| TopBar  [...] [Comment icon + badge count]                       |
-+------------------------------------------------------------------+
-| StickyToolbar                                                    |
-+----------------------------------------------+-------------------+
-|  Page Content (scrollable)                   | Comment Panel     |
-|                                              | (right sidebar)   |
-|  Cover + Icon                                |                   |
-|  Title                                       | Filter: All/Open  |
-|  Editor with highlighted text                | /Resolved         |
-|    [yellow highlight] = open comment         |                   |
-|    [grey highlight] = resolved               | Comment Card 1    |
-|                                              |   - Author, time  |
-|  Bubble menu includes "Comment" button       |   - Selected text  |
-|                                              |   - Comment body   |
-|                                              |   - Reply thread   |
-|                                              |   - Resolve btn    |
-|                                              |                   |
-|                                              | Comment Card 2    |
-|                                              |   ...             |
-+----------------------------------------------+-------------------+
+### Selection Highlight CSS
+```css
+.tiptap ::selection {
+  background-color: hsl(48 96% 89% / 0.8);
+}
 ```
 
-## New Files
+### Comment Popover Positioning Strategy
 
-### 1. `src/hooks/use-comments.ts`
+The current layout is:
+```
+[flex-1 overflow-auto (containerRef)]
+  [max-w-3xl mx-auto content]
+    [InlineCommentPopover (absolute, inside content)]
+```
 
-React Query hooks:
-- `useComments(pageId)` -- fetch all comments for a page (with author profile)
-- `useCreateComment()` -- insert comment + apply mark to editor
-- `useReplyToComment()` -- insert reply
-- `useUpdateCommentStatus()` -- resolve/reopen
-- `useDeleteComment()` -- delete comment + remove mark from editor
-- `useDeleteReply()` -- delete a reply
+New layout:
+```
+[flex-1 overflow-auto (containerRef)] -- position: relative
+  [max-w-3xl mx-auto content]
+  [InlineCommentPopover (absolute, right side, top aligned to selection)]
+```
 
-### 2. `src/components/editor/comment-mark.ts`
+The popover will be positioned with:
+- `position: absolute`
+- `top`: calculated from the selection coordinates relative to the scrollable container
+- `right: 16px` (or a small offset from the right edge)
+- This places it in the right margin, outside the `max-w-3xl` content area
 
-Custom TipTap Mark extension:
-- Name: `commentHighlight`
-- Attributes: `commentId` (string), `status` (string: 'open' | 'resolved')
-- Rendered as `<span>` with data attributes and background color based on status
-- Click handler dispatches a custom event to open the comment thread
+### PageEditor handleCommentClick Update
 
-### 3. `src/components/comments/CommentPanel.tsx`
+Only compute `top` (no `left`):
+```typescript
+const coords = editor.view.coordsAtPos(from);
+const container = containerRef.current;
+if (container) {
+  const containerRect = container.getBoundingClientRect();
+  setCommentPopoverPos({
+    top: coords.top - containerRect.top + container.scrollTop,
+  });
+}
+```
 
-Right-side panel (collapsible):
-- Header: "All discussions" with filter tabs (All / Open / Resolved)
-- List of comment cards, each showing:
-  - Author name and avatar (from profiles)
-  - Timestamp (relative, using date-fns)
-  - Selected text preview (quoted block)
-  - Comment content
-  - Reply thread (nested)
-  - Reply input
-  - Resolve / Reopen / Delete actions
-- Clicking a comment scrolls the editor to the highlighted text
+### CommentInput Textarea Max Height
+```tsx
+<Textarea
+  className="min-h-[60px] max-h-[280px] text-sm resize-none overflow-y-auto"
+/>
+```
 
-### 4. `src/components/comments/CommentInput.tsx`
+## Files Modified
 
-Reusable comment input component:
-- Multi-line textarea
-- Submit (Cmd+Enter) and Cancel buttons
-- Used in both the inline popover and reply threads
-
-### 5. `src/components/comments/InlineCommentPopover.tsx`
-
-Popover that appears when clicking "Comment" in the bubble menu:
-- Positioned near the selected text
-- Contains the comment input
-- On submit: creates comment, applies highlight mark, closes popover
-
-## Changes to Existing Files
-
-### `src/components/editor/BubbleMenuToolbar.tsx`
-
-- Add a "Comment" button (MessageSquare icon) after the existing toolbar buttons
-- On click: triggers the inline comment popover with the current selection info
-
-### `src/components/PageEditor.tsx`
-
-- Register the `commentHighlight` mark extension in the editor
-- Render `CommentPanel` as a sibling to the editor content area (flex layout)
-- Render `InlineCommentPopover` when comment mode is active
-- Add comment panel toggle state
-- Handle click events on comment marks to scroll/highlight in panel
-
-### `src/components/TopBar.tsx`
-
-- Add a comment icon button (MessageSquare) with unresolved count badge
-- Clicking toggles the comment panel open/closed
-
-### `src/stores/app-store.ts`
-
-- Add `commentPanelOpen: boolean` and `setCommentPanelOpen` to the store
-- Add `activeCommentId: string | null` and `setActiveCommentId` for highlighting active comment
-
-### `src/pages/Index.tsx`
-
-- No structural changes needed (comment panel is inside PageEditor)
-
-### `src/index.css`
-
-- Add styles for comment highlight marks (yellow for open, grey for resolved)
-- Add hover styles for highlighted text
-- Add comment panel styles
-
-## Comment Creation Flow
-
-1. User selects text in the editor
-2. Bubble menu appears with "Comment" button
-3. User clicks "Comment"
-4. Inline popover opens with text input
-5. User types comment, presses Submit or Cmd+Enter
-6. System:
-   a. Captures selection range (from/to positions) and selected text snapshot
-   b. Inserts comment record in database
-   c. Applies `commentHighlight` mark with the comment ID to the selected text
-   d. Editor content (with mark) is auto-saved via existing debounce
-   e. Comment panel updates to show new comment
-7. Popover closes
-
-## Text Anchoring Strategy
-
-Comments are anchored via TipTap marks embedded in the HTML content:
-- When a comment is created, a `<span data-comment-id="..." data-comment-status="open">` mark wraps the selected text
-- This mark persists in the saved HTML, so on reload, highlights are automatic
-- If the user edits the highlighted text, the mark stretches/shrinks with it naturally (TipTap mark behavior)
-- If all highlighted text is deleted, the mark is removed from the DOM -- the comment becomes "orphaned"
-- Orphan detection: when loading comments, check if the editor HTML still contains the comment ID mark; if not, flag as orphaned
-
-## Comment Resolution
-
-- Resolve: updates `status` to 'resolved', updates the mark's `data-comment-status` attribute in the editor (changes highlight from yellow to grey), saves content
-- Reopen: reverse of resolve
-
-## Edge Cases
-
-| Case | Handling |
+| File | Change |
 |---|---|
-| Highlighted text deleted | Comment becomes orphaned, shown with warning in panel |
-| Page content edited around highlight | TipTap marks naturally adjust with edits |
-| Comment on empty selection | Button disabled when selection is empty |
-| Very long selected text | Show truncated preview (first 100 chars) in panel |
-| Max comment length | 2000 character limit on textarea |
-| Delete comment | Remove mark from editor content, delete from DB |
-| Multiple comments on overlapping text | Each gets its own mark with unique ID; highlights stack |
-
-## Implementation Sequence
-
-1. Database migration: create `comments` and `comment_replies` tables with RLS
-2. `comment-mark.ts`: TipTap custom mark extension
-3. `use-comments.ts`: React Query hooks for CRUD
-4. `CommentInput.tsx`: reusable input component
-5. `InlineCommentPopover.tsx`: popover for creating comments
-6. `CommentPanel.tsx`: right-side panel with threads
-7. Update `app-store.ts`: add comment panel state
-8. Update `BubbleMenuToolbar.tsx`: add Comment button
-9. Update `TopBar.tsx`: add comment panel toggle with badge
-10. Update `PageEditor.tsx`: integrate mark extension, panel, and popover
-11. Update `src/index.css`: comment highlight and panel styles
-
-## Files Summary
-
-| File | Action |
-|---|---|
-| `comments` table (migration) | New |
-| `comment_replies` table (migration) | New |
-| `src/components/editor/comment-mark.ts` | New |
-| `src/hooks/use-comments.ts` | New |
-| `src/components/comments/CommentInput.tsx` | New |
-| `src/components/comments/InlineCommentPopover.tsx` | New |
-| `src/components/comments/CommentPanel.tsx` | New |
-| `src/stores/app-store.ts` | Modify -- add comment panel state |
-| `src/components/editor/BubbleMenuToolbar.tsx` | Modify -- add Comment button |
-| `src/components/TopBar.tsx` | Modify -- add panel toggle + badge |
-| `src/components/PageEditor.tsx` | Modify -- integrate mark, panel, popover |
-| `src/index.css` | Modify -- add comment highlight styles |
+| `src/index.css` | Add yellow selection highlight for `.tiptap` |
+| `src/components/PageEditor.tsx` | Move popover outside content column, simplify positioning to top-only |
+| `src/components/comments/InlineCommentPopover.tsx` | Update to right-margin layout, accept top-only position |
+| `src/components/comments/CommentInput.tsx` | Add max-height with scroll on textarea |
 
