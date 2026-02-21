@@ -34,6 +34,8 @@ export function PageEditor() {
   const updatePage = useUpdatePage();
   const trackOpen = useTrackPageOpen();
   const [title, setTitle] = useState("");
+  const titleRef = useRef(title);
+  titleRef.current = title;
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -92,7 +94,7 @@ export function PageEditor() {
       },
     },
     onUpdate: ({ editor }) => {
-      scheduleSave(title, editor.getHTML());
+      scheduleSave(titleRef.current, editor.getHTML());
     },
   });
 
@@ -123,15 +125,17 @@ export function PageEditor() {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       setSaveStatus("saving");
       saveTimerRef.current = setTimeout(async () => {
+        // Guard: never overwrite a real title with empty (stale closure safety)
+        const safeTitle = (newTitle === "" && lastSavedTitle.current !== "") ? lastSavedTitle.current : newTitle;
         const updates: any = {};
-        if (newTitle !== lastSavedTitle.current) updates.title = newTitle;
+        if (safeTitle !== lastSavedTitle.current) updates.title = safeTitle;
         if (newContent !== lastSavedContent.current) updates.content = newContent;
         if (Object.keys(updates).length === 0) {
           setSaveStatus("saved");
           return;
         }
         await updatePage.mutateAsync({ id: selectedPageId, ...updates });
-        lastSavedTitle.current = newTitle;
+        lastSavedTitle.current = safeTitle;
         lastSavedContent.current = newContent;
         setSaveStatus("saved");
       }, 1500);
