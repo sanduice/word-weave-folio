@@ -51,7 +51,7 @@ export function CommentInput({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         maxLength={2000}
-        className="min-h-[60px] text-sm resize-none"
+        className="min-h-[60px] max-h-[280px] text-sm resize-none overflow-y-auto"
       />
       <div className="flex items-center justify-end gap-2">
         {onCancel && (

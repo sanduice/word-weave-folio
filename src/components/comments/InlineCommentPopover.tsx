@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { CommentInput } from "./CommentInput";
 
 interface InlineCommentPopoverProps {
-  position: { top: number; left: number } | null;
+  position: { top: number } | null;
   onSubmit: (content: string) => void;
   onCancel: () => void;
 }
@@ -36,7 +36,7 @@ export function InlineCommentPopover({ position, onSubmit, onCancel }: InlineCom
     <div
       ref={ref}
       className="absolute z-[80] w-72 bg-popover border border-border rounded-lg shadow-lg p-3"
-      style={{ top: position.top, left: position.left }}
+      style={{ top: position.top, right: 16 }}
     >
       <p className="text-xs text-muted-foreground mb-2 font-medium">Add a comment</p>
       <CommentInput onSubmit={onSubmit} onCancel={onCancel} submitLabel="Comment" />

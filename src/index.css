@@ -61,6 +61,10 @@
   outline: none;
 }
 
+.tiptap ::selection {
+  background-color: hsl(48 96% 89% / 0.8);
+}
+
 .tiptap p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;

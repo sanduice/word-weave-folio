@@ -51,7 +51,7 @@ export function PageEditor() {
   const lastSavedTitle = useRef<string>("");
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkUrl, setLinkUrl] = useState("");
-  const [commentPopoverPos, setCommentPopoverPos] = useState<{ top: number; left: number } | null>(null);
+  const [commentPopoverPos, setCommentPopoverPos] = useState<{ top: number } | null>(null);
   const [pendingSelection, setPendingSelection] = useState<{ from: number; to: number; text: string } | null>(null);
 
   const editor = useEditor({
@@ -225,8 +225,7 @@ export function PageEditor() {
     if (container) {
       const containerRect = container.getBoundingClientRect();
       setCommentPopoverPos({
-        top: coords.top - containerRect.top + container.scrollTop + 24,
-        left: Math.max(0, Math.min(coords.left - containerRect.left, containerRect.width - 300)),
+        top: coords.top - containerRect.top + container.scrollTop,
       });
     }
   };
@@ -326,7 +325,7 @@ export function PageEditor() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Main editor area */}
-        <div className="flex-1 flex flex-col overflow-auto" ref={containerRef}>
+        <div className="flex-1 flex flex-col overflow-auto relative" ref={containerRef}>
           {/* Page icon & cover controls */}
           {page && (
             <PageIconCoverControls
@@ -378,16 +377,6 @@ export function PageEditor() {
             {/* Slash command menu */}
             {editor && <SlashCommandMenu editor={editor} />}
 
-            {/* Inline comment popover */}
-            <InlineCommentPopover
-              position={commentPopoverPos}
-              onSubmit={handleCommentSubmit}
-              onCancel={() => {
-                setCommentPopoverPos(null);
-                setPendingSelection(null);
-              }}
-            />
-
             {/* Link dialog */}
             <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
               <DialogContent className="sm:max-w-md">
@@ -436,6 +425,16 @@ export function PageEditor() {
               </div>
             )}
           </div>
+
+          {/* Inline comment popover - positioned in right margin */}
+          <InlineCommentPopover
+            position={commentPopoverPos}
+            onSubmit={handleCommentSubmit}
+            onCancel={() => {
+              setCommentPopoverPos(null);
+              setPendingSelection(null);
+            }}
+          />
         </div>
 
         {/* Comment panel */}
