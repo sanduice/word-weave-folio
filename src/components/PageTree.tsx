@@ -238,7 +238,7 @@ function PageTreeItem({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-sidebar-accent shrink-0 transition-opacity"
+          className="p-0.5 rounded opacity-0 group-hover/page-item:opacity-100 hover:bg-sidebar-accent shrink-0 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
           <MoreHorizontal className="h-3.5 w-3.5" />
@@ -294,7 +294,7 @@ function PageTreeItem({
           <SidebarMenuItem>
             <div
               ref={itemRef}
-              className={`flex items-center w-full group rounded min-w-0 overflow-hidden ${dropIndicatorClass}`}
+              className={`flex items-center w-full group/page-item rounded min-w-0 overflow-hidden ${dropIndicatorClass}`}
               draggable={!isRenaming}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
@@ -302,7 +302,7 @@ function PageTreeItem({
               onDrop={handleDrop}
               onDragEnd={handleDragEnd}
             >
-              <span className="p-1 opacity-0 group-hover:opacity-40 cursor-grab shrink-0">
+              <span className="p-1 opacity-0 group-hover/page-item:opacity-40 cursor-grab shrink-0">
                 <GripVertical className="h-3 w-3" />
               </span>
               <CollapsibleTrigger asChild>
@@ -345,7 +345,7 @@ function PageTreeItem({
       <SidebarMenuItem>
         <div
           ref={itemRef}
-          className={`flex items-center w-full group rounded min-w-0 overflow-hidden ${dropIndicatorClass}`}
+          className={`flex items-center w-full group/page-item rounded min-w-0 overflow-hidden ${dropIndicatorClass}`}
           draggable={!isRenaming}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
@@ -353,7 +353,7 @@ function PageTreeItem({
           onDrop={handleDrop}
           onDragEnd={handleDragEnd}
         >
-          <span className="p-1 opacity-0 group-hover:opacity-40 cursor-grab shrink-0">
+          <span className="p-1 opacity-0 group-hover/page-item:opacity-40 cursor-grab shrink-0">
             <GripVertical className="h-3 w-3" />
           </span>
           <span className="w-4 shrink-0" />
