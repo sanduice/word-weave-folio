@@ -221,11 +221,12 @@ export function PageEditor() {
 
     // Position popover near selection
     const coords = editor.view.coordsAtPos(from);
-    const editorRect = containerRef.current?.getBoundingClientRect();
-    if (editorRect) {
+    const container = containerRef.current;
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
       setCommentPopoverPos({
-        top: coords.top - editorRect.top + 24,
-        left: coords.left - editorRect.left,
+        top: coords.top - containerRect.top + container.scrollTop + 24,
+        left: Math.max(0, Math.min(coords.left - containerRect.left, containerRect.width - 300)),
       });
     }
   };
