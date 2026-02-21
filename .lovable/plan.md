@@ -1,146 +1,122 @@
 
 
-# Fix: Page Title Overwriting on Page Switch During Pending Save
+# Page Context Menu & Title Truncation
 
-## Root Cause
+## Overview
 
-The bug is a **race condition** between the debounced save timer and page switching. Here is the exact sequence:
+Add a hover-triggered action menu (three-dot "more" button) to each page item in the sidebar, with Duplicate, Rename, and Delete options. Also ensure page titles never wrap to multiple lines.
 
-### Scenario: User renames Page A, then clicks Page B before save completes
+## Current State
 
-1. User renames Page A to "New Name A"
-2. `scheduleSave("New Name A", htmlA)` fires, sets a 1500ms timer (closure captures `selectedPageId = A`)
-3. User clicks Page B **within 1500ms**
-4. `selectedPageId` changes to B, `scheduleSave` is recreated with new closure
-5. Page B data loads -- the effect runs:
-   - `setTitle("Page B Title")` -- queued (async state update, not yet rendered)
-   - `lastSavedTitle.current = "Page B Title"`
-   - `lastSavedContent.current = contentB`
-   - `editor.commands.setContent(contentB)` -- this may trigger `onUpdate`
-6. **Problem A**: If `setContent` triggers `onUpdate`, it calls the NEW `scheduleSave` (closure B) with `titleRef.current` -- but `titleRef` still holds "New Name A" because `setTitle` hasn't rendered yet. So it schedules saving `{ id: B, title: "New Name A" }` -- **overwriting Page B's title with Page A's name**.
-7. **Problem B**: The OLD timer from step 2 fires and saves correctly to page A, but then overwrites `lastSavedTitle.current = "New Name A"` and `lastSavedContent.current = htmlA`. These shared refs now hold page A's data while the user is on page B, corrupting future comparisons.
+- Page titles already use `truncate` CSS class, but the parent container doesn't constrain width properly with `min-w-0`, so long titles can push the layout.
+- No action menu exists on page items currently.
+- `useDeletePage` and `useCreatePage` hooks already exist in `use-pages.ts`.
+- No dedicated duplicate hook exists yet.
 
-### Two bugs in one
+## What to Build
 
-| Bug | Cause | Effect |
-|---|---|---|
-| Pending timer not cancelled on page switch | No cleanup effect for `selectedPageId` change | Old timer corrupts shared refs after completing |
-| `titleRef` stale during page load | `setTitle()` is async, `titleRef` updates on render, but `setContent` may trigger `onUpdate` before render | Page A's title is saved to Page B |
+### 1. Three-dot action menu on hover (ContextMenu pattern)
 
-## Solution
+Each page item in the sidebar will show a small "..." (MoreHorizontal) icon button on hover, aligned to the right. Clicking it opens a dropdown with:
 
-### Fix 1: Cancel pending save and flush on page switch
+- **Rename** -- Turns the title into an inline editable input field. On blur or Enter, saves via `useUpdatePage`.
+- **Duplicate** -- Creates a copy of the page (same title + " (copy)", same content, same space/folder/parent). Selects the new page after creation.
+- **Delete** -- Deletes the page with a confirmation. If the deleted page was selected, clears `selectedPageId`.
 
-Add a `useEffect` that runs when `selectedPageId` changes to:
-- Clear any pending save timer
-- Reset save status
+### 2. Title single-line enforcement
 
-This prevents the old page's timer from firing after the user has moved to a new page.
+Add `min-w-0` and `overflow-hidden` to the flex container so `truncate` works correctly on deeply nested or long titles.
 
-### Fix 2: Guard saves with page ID check
+## Files to Modify
 
-Store the target page ID directly in the `setTimeout` closure (not via ref or `useCallback` closure). Before executing the save, verify the page ID still matches `selectedPageId`. If not, skip the ref updates.
-
-### Fix 3: Update refs BEFORE calling setContent
-
-In the page load effect, update `titleRef` synchronously (via the ref directly) before calling `editor.commands.setContent()`, so if `onUpdate` fires, it reads the correct title.
-
-## File to Modify
-
-`src/components/PageEditor.tsx` -- approximately 10 lines changed.
-
-## Detailed Changes
-
-### Change 1: Add page-switch cleanup effect (new, after line 120)
-
-```typescript
-// Cancel pending save when switching pages
-useEffect(() => {
-  return () => {
-    if (saveTimerRef.current) {
-      clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = undefined;
-    }
-  };
-}, [selectedPageId]);
-```
-
-This ensures any in-flight debounced save from the old page is cancelled when the user navigates away.
-
-### Change 2: Update titleRef before setContent in the load effect (modify lines 109-120)
-
-```typescript
-useEffect(() => {
-  if (page && editor) {
-    setTitle(page.title);
-    titleRef.current = page.title;  // <-- sync ref IMMEDIATELY, before setContent
-    lastSavedTitle.current = page.title;
-    const content = page.content || "";
-    lastSavedContent.current = content;
-    if (editor.getHTML() !== content) {
-      editor.commands.setContent(content || "");
-    }
-    setSaveStatus("saved");
-  }
-}, [page?.id, page?.content, page?.title]);
-```
-
-The key addition is `titleRef.current = page.title` right after `setTitle()`. This ensures that if `setContent` triggers `onUpdate`, `titleRef.current` already holds the new page's title, not the old page's title.
-
-### Change 3: Capture page ID in setTimeout and guard ref updates (modify scheduleSave)
-
-```typescript
-const scheduleSave = useCallback(
-  (newTitle: string, newContent: string) => {
-    if (!selectedPageId) return;
-    const targetPageId = selectedPageId; // capture at call time
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    setSaveStatus("saving");
-    saveTimerRef.current = setTimeout(async () => {
-      // If user switched pages, abort -- don't save or update refs
-      if (useAppStore.getState().selectedPageId !== targetPageId) {
-        return;
-      }
-      const safeTitle = (newTitle === "" && lastSavedTitle.current !== "") 
-        ? lastSavedTitle.current : newTitle;
-      const updates: any = {};
-      if (safeTitle !== lastSavedTitle.current) updates.title = safeTitle;
-      if (newContent !== lastSavedContent.current) updates.content = newContent;
-      if (Object.keys(updates).length === 0) {
-        setSaveStatus("saved");
-        return;
-      }
-      await updatePage.mutateAsync({ id: targetPageId, ...updates });
-      // Only update refs if still on the same page
-      if (useAppStore.getState().selectedPageId === targetPageId) {
-        lastSavedTitle.current = safeTitle;
-        lastSavedContent.current = newContent;
-        setSaveStatus("saved");
-      }
-    }, 1500);
-  },
-  [selectedPageId, updatePage],
-);
-```
-
-Key changes:
-- `targetPageId` is captured at call time, not read from closure during timeout
-- Before saving, check if the user is still on the same page via `useAppStore.getState()`
-- After saving, only update shared refs if still on the target page -- prevents ref corruption
-
-## What Is NOT Changing
-
-- `use-pages.ts` -- hooks are correct
-- `BubbleMenuToolbar.tsx`, `StickyToolbar.tsx`, `TableToolbar.tsx` -- untouched
-- `AppSidebar.tsx`, sidebar page tree -- untouched
-- Database schema -- no migration needed
-
-## Edge Cases Handled
-
-| Case | Solution |
+| File | Changes |
 |---|---|
-| User renames page A, clicks page B quickly | Timer cancelled by cleanup effect; even if it fires, the page ID check aborts it |
-| `setContent` triggers `onUpdate` during page load | `titleRef.current` is updated synchronously before `setContent`, so `onUpdate` reads the correct title |
-| User edits page B after switching from A | Refs are not corrupted because old timer either was cancelled or skipped ref updates |
-| Rapid page switching (A to B to C) | Each switch cancels the previous timer; the page ID guard prevents stale saves |
+| `src/components/PageTree.tsx` | Add MoreHorizontal button on hover, dropdown menu with Rename/Duplicate/Delete, inline rename state, and fix title overflow |
+| `src/hooks/use-pages.ts` | Add `useDuplicatePage` hook that fetches the source page and inserts a copy |
+
+## Detailed Design
+
+### `use-pages.ts` -- New `useDuplicatePage` Hook
+
+```typescript
+export function useDuplicatePage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (pageId: string) => {
+      const { data: source } = await supabase.from("pages").select("*").eq("id", pageId).single();
+      const { data: user } = await supabase.auth.getUser();
+      const { data, error } = await supabase.from("pages").insert({
+        space_id: source.space_id,
+        title: (source.title?.trim() || "Untitled") + " (copy)",
+        content: source.content,
+        parent_id: source.parent_id,
+        folder_id: source.folder_id,
+        user_id: user.data.user.id,
+      }).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["pages", data.space_id] });
+    },
+  });
+}
+```
+
+### `PageTree.tsx` -- Changes to `PageTreeItem`
+
+**New props passed down from `PageTree`:**
+- `onDuplicate(pageId)` -- calls `useDuplicatePage` then selects the new page
+- `onDelete(pageId)` -- calls `useDeletePage`, clears selection if needed
+- `onRename(pageId, newTitle)` -- calls `useUpdatePage`
+
+**New local state in `PageTreeItem`:**
+- `isRenaming: boolean` -- when true, shows an input instead of the title span
+- `renameValue: string` -- the current input value
+
+**UI structure change (per page item):**
+
+```
+[GripVertical] [Chevron?] [FileText] [Title...] [MoreHorizontal (hover-only)]
+```
+
+The MoreHorizontal button appears via `opacity-0 group-hover:opacity-100` and opens a `DropdownMenu` with:
+- Rename (Pencil icon) -- sets `isRenaming = true`, focuses input
+- Duplicate (Copy icon) -- calls `onDuplicate(page.id)`
+- Delete (Trash2 icon, destructive red) -- shows confirmation dialog, then calls `onDelete(page.id)`
+
+**Inline rename behavior:**
+- Input replaces the title span
+- Auto-focused on mount
+- On Enter or blur: save via `onRename(page.id, renameValue)`, exit rename mode
+- On Escape: cancel, restore original title, exit rename mode
+
+**Title overflow fix:**
+- Add `min-w-0 overflow-hidden` to the outer flex div of each page item
+- Ensure the `SidebarMenuButton` has `min-w-0` so the truncate on the inner span works
+
+### Delete confirmation
+
+Use an `AlertDialog` from the existing UI components to confirm deletion. The dialog says "Delete [page title]?" with "This action cannot be undone." message and Cancel/Delete buttons.
+
+## Implementation Sequence
+
+1. Add `useDuplicatePage` hook to `use-pages.ts`
+2. Update `PageTree.tsx`:
+   a. Add imports for hooks, DropdownMenu, AlertDialog, MoreHorizontal/Copy/Pencil/Trash2 icons
+   b. Add `onDuplicate`, `onDelete`, `onRename` handlers in `PageTree` component using the hooks
+   c. Pass handlers to `PageTreeItem`
+   d. Add rename state, dropdown menu, and delete confirmation to `PageTreeItem`
+   e. Fix overflow with `min-w-0`
+3. No CSS file changes needed -- all styling via Tailwind classes
+
+## Edge Cases
+
+| Case | Handling |
+|---|---|
+| Delete the currently selected page | Clear `selectedPageId` to null after deletion |
+| Rename to empty string | Save as empty -- sidebar already shows "Untitled" for blank titles |
+| Duplicate a page with children | Only duplicates the page itself, not its children (keeps it simple) |
+| Click "more" button while dragging | The button is inside the drag container but uses `stopPropagation` on click to prevent drag interference |
+| Rename while another rename is active | Only one rename at a time per item (local state) |
 
