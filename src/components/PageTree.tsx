@@ -294,7 +294,7 @@ function PageTreeItem({
           <SidebarMenuItem>
             <div
               ref={itemRef}
-              className={`flex items-center w-full group/page-item rounded min-w-0 overflow-hidden ${dropIndicatorClass}`}
+              className={`flex items-center w-full group/page-item rounded min-w-0 ${dropIndicatorClass}`}
               draggable={!isRenaming}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
@@ -315,7 +315,7 @@ function PageTreeItem({
               <SidebarMenuButton
                 isActive={selectedPageId === page.id}
                 onClick={() => !isRenaming && onSelect(page.id)}
-                className="text-sm flex-1 min-w-0"
+                className="text-sm flex-1 min-w-0 w-auto overflow-hidden"
               >
                 <FileText className="h-3.5 w-3.5 shrink-0" />
                 {titleContent}
@@ -345,7 +345,7 @@ function PageTreeItem({
       <SidebarMenuItem>
         <div
           ref={itemRef}
-          className={`flex items-center w-full group/page-item rounded min-w-0 overflow-hidden ${dropIndicatorClass}`}
+          className={`flex items-center w-full group/page-item rounded min-w-0 ${dropIndicatorClass}`}
           draggable={!isRenaming}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
@@ -360,7 +360,7 @@ function PageTreeItem({
           <SidebarMenuButton
             isActive={selectedPageId === page.id}
             onClick={() => !isRenaming && onSelect(page.id)}
-            className="text-sm flex-1 min-w-0"
+            className="text-sm flex-1 min-w-0 w-auto overflow-hidden"
           >
             <FileText className="h-3.5 w-3.5 shrink-0" />
             {titleContent}
