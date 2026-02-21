@@ -255,6 +255,54 @@ export function PageEditor() {
     setCommentPanelOpen(true);
   };
 
+  const handleResolveComment = useCallback((commentId: string, newStatus: string) => {
+    if (!editor) return;
+    const { tr } = editor.state;
+    const markType = editor.schema.marks.commentHighlight;
+    const ranges: { from: number; to: number }[] = [];
+    editor.state.doc.descendants((node, pos) => {
+      const mark = node.marks.find(
+        (m) => m.type.name === "commentHighlight" && m.attrs.commentId === commentId
+      );
+      if (mark) {
+        ranges.push({ from: pos, to: pos + node.nodeSize });
+      }
+    });
+    // Apply in reverse to keep positions stable
+    for (let i = ranges.length - 1; i >= 0; i--) {
+      const { from, to } = ranges[i];
+      tr.removeMark(from, to, markType);
+      tr.addMark(from, to, markType.create({ commentId, status: newStatus }));
+    }
+    if (ranges.length > 0) {
+      editor.view.dispatch(tr);
+      scheduleSave(titleRef.current, editor.getHTML());
+    }
+  }, [editor, scheduleSave]);
+
+  const handleDeleteComment = useCallback((commentId: string) => {
+    if (!editor) return;
+    const { tr } = editor.state;
+    const markType = editor.schema.marks.commentHighlight;
+    const ranges: { from: number; to: number }[] = [];
+    editor.state.doc.descendants((node, pos) => {
+      const mark = node.marks.find(
+        (m) => m.type.name === "commentHighlight" && m.attrs.commentId === commentId
+      );
+      if (mark) {
+        ranges.push({ from: pos, to: pos + node.nodeSize });
+      }
+    });
+    for (let i = ranges.length - 1; i >= 0; i--) {
+      const { from, to } = ranges[i];
+      tr.removeMark(from, to, markType);
+    }
+    if (ranges.length > 0) {
+      editor.view.dispatch(tr);
+      scheduleSave(titleRef.current, editor.getHTML());
+    }
+  }, [editor, scheduleSave]);
+
   const handleCommentPanelClick = (commentId: string) => {
     if (!editor) return;
     // Find the mark in editor and scroll to it
@@ -444,6 +492,8 @@ export function PageEditor() {
             userId={user.id}
             editorHtml={editor?.getHTML() || ""}
             onCommentClick={handleCommentPanelClick}
+            onResolveComment={handleResolveComment}
+            onDeleteComment={handleDeleteComment}
             onClose={() => setCommentPanelOpen(false)}
           />
         )}

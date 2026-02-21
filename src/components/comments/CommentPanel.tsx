@@ -19,12 +19,14 @@ interface CommentPanelProps {
   userId: string;
   editorHtml: string;
   onCommentClick: (commentId: string) => void;
+  onResolveComment: (commentId: string, status: string) => void;
+  onDeleteComment: (commentId: string) => void;
   onClose: () => void;
 }
 
 type FilterType = "all" | "open" | "resolved";
 
-export function CommentPanel({ pageId, userId, editorHtml, onCommentClick, onClose }: CommentPanelProps) {
+export function CommentPanel({ pageId, userId, editorHtml, onCommentClick, onResolveComment, onDeleteComment, onClose }: CommentPanelProps) {
   const { data: comments = [] } = useComments(pageId);
   const replyMutation = useReplyToComment();
   const statusMutation = useUpdateCommentStatus();
@@ -142,7 +144,10 @@ export function CommentPanel({ pageId, userId, editorHtml, onCommentClick, onClo
                   variant="ghost"
                   size="sm"
                   className="h-6 text-[10px] gap-1 text-muted-foreground"
-                  onClick={() => statusMutation.mutate({ id: comment.id, status: "resolved", page_id: pageId })}
+                  onClick={() => {
+                    statusMutation.mutate({ id: comment.id, status: "resolved", page_id: pageId });
+                    onResolveComment(comment.id, "resolved");
+                  }}
                 >
                   <CheckCircle className="h-3 w-3" /> Resolve
                 </Button>
@@ -151,7 +156,10 @@ export function CommentPanel({ pageId, userId, editorHtml, onCommentClick, onClo
                   variant="ghost"
                   size="sm"
                   className="h-6 text-[10px] gap-1 text-muted-foreground"
-                  onClick={() => statusMutation.mutate({ id: comment.id, status: "open", page_id: pageId })}
+                  onClick={() => {
+                    statusMutation.mutate({ id: comment.id, status: "open", page_id: pageId });
+                    onResolveComment(comment.id, "open");
+                  }}
                 >
                   <RotateCcw className="h-3 w-3" /> Reopen
                 </Button>
@@ -169,7 +177,10 @@ export function CommentPanel({ pageId, userId, editorHtml, onCommentClick, onClo
                   variant="ghost"
                   size="sm"
                   className="h-6 text-[10px] gap-1 text-destructive/70 hover:text-destructive ml-auto"
-                  onClick={() => deleteMutation.mutate({ id: comment.id, page_id: pageId })}
+                  onClick={() => {
+                    deleteMutation.mutate({ id: comment.id, page_id: pageId });
+                    onDeleteComment(comment.id);
+                  }}
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
