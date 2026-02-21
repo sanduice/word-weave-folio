@@ -100,7 +100,7 @@ export function PageIconCoverControls({
       )}
 
       {/* Icon + hover controls container */}
-      <div className="max-w-3xl mx-auto w-full px-6">
+      <div className="max-w-3xl mx-auto w-full px-6 relative z-10">
         {/* Icon display */}
         {hasIcon && (
           <div className={`${hasCover ? "-mt-8" : "mt-8"}`}>
