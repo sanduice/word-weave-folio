@@ -1,9 +1,26 @@
 import { SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
-import { ChevronRight, FileText, GripVertical } from "lucide-react";
-import { useState, useRef } from "react";
+import { ChevronRight, FileText, GripVertical, MoreHorizontal, Pencil, Copy, Trash2 } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
 import type { Page } from "@/hooks/use-pages";
-import { useReorderPages } from "@/hooks/use-pages";
+import { useReorderPages, useUpdatePage, useDeletePage, useDuplicatePage } from "@/hooks/use-pages";
+import { useAppStore } from "@/stores/app-store";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const displayTitle = (title: string) => title?.trim() || "Untitled";
 
@@ -17,7 +34,11 @@ interface PageTreeProps {
 
 export function PageTree({ pages, rootPages, selectedPageId, onSelect, depth }: PageTreeProps) {
   const reorder = useReorderPages();
-  // Optimistic local order
+  const updatePage = useUpdatePage();
+  const deletePage = useDeletePage();
+  const duplicatePage = useDuplicatePage();
+  const setSelectedPageId = useAppStore((s) => s.setSelectedPageId);
+
   const [localOrder, setLocalOrder] = useState<string[] | null>(null);
   const draggedId = useRef<string | null>(null);
 
@@ -27,25 +48,42 @@ export function PageTree({ pages, rootPages, selectedPageId, onSelect, depth }: 
 
   function handleReorder(draggedPageId: string, targetPageId: string, position: "before" | "after") {
     if (draggedPageId === targetPageId) return;
-
     const base = localOrder
       ? localOrder.map((id) => rootPages.find((p) => p.id === id)!).filter(Boolean)
       : [...rootPages];
-
     const without = base.filter((p) => p.id !== draggedPageId);
     const targetIdx = without.findIndex((p) => p.id === targetPageId);
     if (targetIdx === -1) return;
-
     const insertAt = position === "before" ? targetIdx : targetIdx + 1;
     without.splice(insertAt, 0, base.find((p) => p.id === draggedPageId)!);
-
     const newOrder = without.map((p) => p.id);
     setLocalOrder(newOrder);
-
     const updates = without.map((p, i) => ({ id: p.id, sort_order: i + 1 }));
     reorder.mutate(updates, {
       onError: () => setLocalOrder(null),
       onSuccess: () => setLocalOrder(null),
+    });
+  }
+
+  function handleRename(pageId: string, newTitle: string) {
+    updatePage.mutate({ id: pageId, title: newTitle });
+  }
+
+  function handleDuplicate(pageId: string) {
+    duplicatePage.mutate(pageId, {
+      onSuccess: (newPage) => {
+        setSelectedPageId(newPage.id);
+        onSelect(newPage.id);
+      },
+    });
+  }
+
+  function handleDelete(pageId: string) {
+    const isSelected = useAppStore.getState().selectedPageId === pageId;
+    deletePage.mutate(pageId, {
+      onSuccess: () => {
+        if (isSelected) setSelectedPageId(null);
+      },
     });
   }
 
@@ -61,6 +99,9 @@ export function PageTree({ pages, rootPages, selectedPageId, onSelect, depth }: 
           depth={depth}
           draggedId={draggedId}
           onReorder={handleReorder}
+          onRename={handleRename}
+          onDuplicate={handleDuplicate}
+          onDelete={handleDelete}
         />
       ))}
     </>
@@ -75,6 +116,9 @@ function PageTreeItem({
   depth,
   draggedId,
   onReorder,
+  onRename,
+  onDuplicate,
+  onDelete,
 }: {
   page: Page;
   pages: Page[];
@@ -83,13 +127,44 @@ function PageTreeItem({
   depth: number;
   draggedId: React.MutableRefObject<string | null>;
   onReorder: (draggedId: string, targetId: string, position: "before" | "after") => void;
+  onRename: (pageId: string, newTitle: string) => void;
+  onDuplicate: (pageId: string) => void;
+  onDelete: (pageId: string) => void;
 }) {
   const [open, setOpen] = useState(true);
   const [dropPosition, setDropPosition] = useState<"before" | "after" | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(page.title);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
   const children = pages.filter((p) => p.parent_id === page.id);
   const hasChildren = children.length > 0;
   const maxExpandDepth = 3;
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [isRenaming]);
+
+  function startRename() {
+    setRenameValue(page.title);
+    setIsRenaming(true);
+  }
+
+  function commitRename() {
+    setIsRenaming(false);
+    if (renameValue !== page.title) {
+      onRename(page.id, renameValue);
+    }
+  }
+
+  function cancelRename() {
+    setIsRenaming(false);
+    setRenameValue(page.title);
+  }
 
   function getDropPosition(e: React.DragEvent, el: HTMLElement): "before" | "after" {
     const rect = el.getBoundingClientRect();
@@ -131,93 +206,168 @@ function PageTreeItem({
     draggedId.current = null;
   }
 
-  const dropIndicatorClass = dropPosition === "before"
-    ? "border-t-2 border-primary"
-    : dropPosition === "after"
-    ? "border-b-2 border-primary"
-    : "";
+  const dropIndicatorClass =
+    dropPosition === "before"
+      ? "border-t-2 border-primary"
+      : dropPosition === "after"
+      ? "border-b-2 border-primary"
+      : "";
 
   const titleIsEmpty = !page.title?.trim();
 
+  const titleContent = isRenaming ? (
+    <input
+      ref={renameInputRef}
+      value={renameValue}
+      onChange={(e) => setRenameValue(e.target.value)}
+      onBlur={commitRename}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") commitRename();
+        if (e.key === "Escape") cancelRename();
+      }}
+      className="text-sm bg-transparent border border-border rounded px-1 py-0 w-full outline-none focus:ring-1 focus:ring-ring min-w-0"
+      onClick={(e) => e.stopPropagation()}
+    />
+  ) : (
+    <span className={`truncate ${titleIsEmpty ? "italic text-muted-foreground/50" : ""}`}>
+      {displayTitle(page.title)}
+    </span>
+  );
+
+  const actionMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-sidebar-accent shrink-0 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MoreHorizontal className="h-3.5 w-3.5" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="right" align="start" className="w-36">
+        <DropdownMenuItem onClick={() => startRename()}>
+          <Pencil className="h-3.5 w-3.5 mr-2" />
+          Rename
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onDuplicate(page.id)}>
+          <Copy className="h-3.5 w-3.5 mr-2" />
+          Duplicate
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => setShowDeleteDialog(true)}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="h-3.5 w-3.5 mr-2" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const deleteDialog = (
+    <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete "{displayTitle(page.title)}"?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This action cannot be undone. This will permanently delete this page.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => onDelete(page.id)}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            Delete
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   if (hasChildren && depth < maxExpandDepth) {
     return (
-      <Collapsible open={open} onOpenChange={setOpen}>
-        <SidebarMenuItem>
-          <div
-            ref={itemRef}
-            className={`flex items-center w-full group rounded ${dropIndicatorClass}`}
-            draggable
-            onDragStart={handleDragStart}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
-          >
-            <span className="p-1 opacity-0 group-hover:opacity-40 cursor-grab shrink-0">
-              <GripVertical className="h-3 w-3" />
-            </span>
-            <CollapsibleTrigger asChild>
-              <button className="p-1 hover:bg-sidebar-accent rounded shrink-0">
-                <ChevronRight
-                  className={`h-3 w-3 transition-transform ${open ? "rotate-90" : ""}`}
-                />
-              </button>
-            </CollapsibleTrigger>
-            <SidebarMenuButton
-              isActive={selectedPageId === page.id}
-              onClick={() => onSelect(page.id)}
-              className="text-sm flex-1"
+      <>
+        {deleteDialog}
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <SidebarMenuItem>
+            <div
+              ref={itemRef}
+              className={`flex items-center w-full group rounded min-w-0 overflow-hidden ${dropIndicatorClass}`}
+              draggable={!isRenaming}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onDragEnd={handleDragEnd}
             >
-              <FileText className="h-3.5 w-3.5 shrink-0" />
-              <span className={`truncate ${titleIsEmpty ? "italic text-muted-foreground/50" : ""}`}>
-                {displayTitle(page.title)}
+              <span className="p-1 opacity-0 group-hover:opacity-40 cursor-grab shrink-0">
+                <GripVertical className="h-3 w-3" />
               </span>
-            </SidebarMenuButton>
-          </div>
-        </SidebarMenuItem>
-        <CollapsibleContent>
-          <div className="ml-3 border-l border-sidebar-border pl-1">
-            <PageTree
-              pages={pages}
-              rootPages={children}
-              selectedPageId={selectedPageId}
-              onSelect={onSelect}
-              depth={depth + 1}
-            />
-          </div>
-        </CollapsibleContent>
-      </Collapsible>
+              <CollapsibleTrigger asChild>
+                <button className="p-1 hover:bg-sidebar-accent rounded shrink-0">
+                  <ChevronRight
+                    className={`h-3 w-3 transition-transform ${open ? "rotate-90" : ""}`}
+                  />
+                </button>
+              </CollapsibleTrigger>
+              <SidebarMenuButton
+                isActive={selectedPageId === page.id}
+                onClick={() => !isRenaming && onSelect(page.id)}
+                className="text-sm flex-1 min-w-0"
+              >
+                <FileText className="h-3.5 w-3.5 shrink-0" />
+                {titleContent}
+              </SidebarMenuButton>
+              {actionMenu}
+            </div>
+          </SidebarMenuItem>
+          <CollapsibleContent>
+            <div className="ml-3 border-l border-sidebar-border pl-1">
+              <PageTree
+                pages={pages}
+                rootPages={children}
+                selectedPageId={selectedPageId}
+                onSelect={onSelect}
+                depth={depth + 1}
+              />
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      </>
     );
   }
 
   return (
-    <SidebarMenuItem>
-      <div
-        ref={itemRef}
-        className={`flex items-center w-full group rounded ${dropIndicatorClass}`}
-        style={{ paddingLeft: hasChildren ? 0 : "0" }}
-        draggable
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onDragEnd={handleDragEnd}
-      >
-        <span className="p-1 opacity-0 group-hover:opacity-40 cursor-grab shrink-0">
-          <GripVertical className="h-3 w-3" />
-        </span>
-        <span className="w-4 shrink-0" />
-        <SidebarMenuButton
-          isActive={selectedPageId === page.id}
-          onClick={() => onSelect(page.id)}
-          className="text-sm flex-1"
+    <>
+      {deleteDialog}
+      <SidebarMenuItem>
+        <div
+          ref={itemRef}
+          className={`flex items-center w-full group rounded min-w-0 overflow-hidden ${dropIndicatorClass}`}
+          draggable={!isRenaming}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onDragEnd={handleDragEnd}
         >
-          <FileText className="h-3.5 w-3.5 shrink-0" />
-          <span className={`truncate ${titleIsEmpty ? "italic text-muted-foreground/50" : ""}`}>
-            {displayTitle(page.title)}
+          <span className="p-1 opacity-0 group-hover:opacity-40 cursor-grab shrink-0">
+            <GripVertical className="h-3 w-3" />
           </span>
-        </SidebarMenuButton>
-      </div>
-    </SidebarMenuItem>
+          <span className="w-4 shrink-0" />
+          <SidebarMenuButton
+            isActive={selectedPageId === page.id}
+            onClick={() => !isRenaming && onSelect(page.id)}
+            className="text-sm flex-1 min-w-0"
+          >
+            <FileText className="h-3.5 w-3.5 shrink-0" />
+            {titleContent}
+          </SidebarMenuButton>
+          {actionMenu}
+        </div>
+      </SidebarMenuItem>
+    </>
   );
 }

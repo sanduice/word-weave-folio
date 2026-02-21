@@ -156,6 +156,39 @@ export function useBacklinks(pageId: string | undefined) {
   });
 }
 
+export function useDuplicatePage() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (pageId: string) => {
+      const { data: source, error: fetchError } = await supabase
+        .from("pages")
+        .select("*")
+        .eq("id", pageId)
+        .single();
+      if (fetchError || !source) throw fetchError || new Error("Page not found");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+      const { data, error } = await supabase
+        .from("pages")
+        .insert({
+          space_id: source.space_id,
+          title: (source.title?.trim() || "Untitled") + " (copy)",
+          content: source.content,
+          parent_id: source.parent_id,
+          folder_id: source.folder_id,
+          user_id: user.id,
+        })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as Page;
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["pages", data.space_id] });
+    },
+  });
+}
+
 export function useReorderPages() {
   const qc = useQueryClient();
   return useMutation({
