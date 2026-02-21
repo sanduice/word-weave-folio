@@ -1,100 +1,73 @@
 
 
-# Comment Box Layout and Selection Highlight Fixes
+# Fix: Comment Highlights Not Updating on Resolve/Delete
 
-## Problem Summary
+## Problem
 
-Three issues need to be addressed:
-1. **Selection highlight**: When selecting text in the editor, the selected text should show a yellow highlight (custom selection color) instead of the default browser blue selection.
-2. **Comment box positioning**: The comment input box currently appears as an absolute-positioned popover inside the editor. It should instead appear to the **right side** of the content area, aligned vertically with the top of the selected text (like Notion's approach shown in the screenshots).
-3. **Comment input scrolling**: The textarea in the comment box should show approximately 14-15 lines of text before adding a scrollbar, instead of growing infinitely.
+When a comment is resolved or deleted via the CommentPanel, only the database is updated. The TipTap editor marks (`commentHighlight`) are never modified, so the yellow highlight persists in the editor HTML. On page reload, the stale marks remain in the saved content.
+
+## Root Cause
+
+`CommentPanel` calls `statusMutation.mutate()` and `deleteMutation.mutate()` which update the database but have no access to the TipTap editor instance. The editor marks (which control the highlight color) are never updated or removed.
+
+## Solution
+
+Pass two callback functions from `PageEditor` (which owns the editor instance) to `CommentPanel`:
+
+1. **onResolveComment(commentId, newStatus)** -- finds the mark in the editor and updates its `status` attribute (open -> resolved changes yellow to grey, resolved -> open changes grey to yellow), then triggers a save.
+2. **onDeleteComment(commentId)** -- finds and removes the mark entirely from the editor, then triggers a save.
 
 ## Changes
 
-### 1. `src/index.css` -- Custom Selection Color
+### 1. `src/components/PageEditor.tsx`
 
-Add a CSS rule targeting `.tiptap ::selection` to change the browser's default blue selection to a yellow highlight color, matching the Notion-style appearance.
+Add two handler functions that manipulate TipTap marks:
 
-### 2. `src/components/PageEditor.tsx` -- Reposition Comment Popover
+- `handleResolveComment(commentId, status)`: Traverse the editor document, find all text nodes with the `commentHighlight` mark matching the commentId, remove the old mark and re-apply it with the updated `status` attribute. Then trigger `scheduleSave`.
+- `handleDeleteComment(commentId)`: Traverse the editor document, find all text nodes with the matching mark, and remove (unset) the mark from those ranges. Then trigger `scheduleSave`.
 
-Move the `InlineCommentPopover` out of the `max-w-3xl` content column and render it as a sibling positioned to the right of the editor content. The comment box will:
-- Float in the right margin area (outside the main content column)
-- Align its top edge with the top of the selected text
-- Use the full available right-side space (similar to how the comment panel works, but as a lightweight input)
+Pass these as new props `onResolveComment` and `onDeleteComment` to `CommentPanel`.
 
-The `handleCommentClick` function will be updated to calculate the `top` position relative to the scrollable container, so the popover aligns with the selected text vertically. The `left` positioning will be removed -- instead the popover will be placed using CSS to sit in the right margin.
+### 2. `src/components/comments/CommentPanel.tsx`
 
-### 3. `src/components/comments/InlineCommentPopover.tsx` -- Layout and Scroll
+- Accept two new props: `onResolveComment(commentId: string, status: string)` and `onDeleteComment(commentId: string)`.
+- In the Resolve/Reopen button handler: call `onResolveComment` in addition to the existing `statusMutation.mutate()`.
+- In the Delete button handler: call `onDeleteComment` in addition to `deleteMutation.mutate()`.
 
-Update the popover component:
-- Change from `absolute` inside editor to a right-margin positioned element
-- Accept only a `top` value (no `left` needed since it always sits to the right)
-- Set the width to approximately 280-300px
+### 3. `src/components/editor/comment-mark.ts`
 
-### 4. `src/components/comments/CommentInput.tsx` -- Max Height with Scroll
+No changes needed -- the mark already supports `status` as an attribute.
 
-Update the textarea to have a maximum height that accommodates roughly 14-15 lines of text (~280px at 14px line-height), after which a vertical scrollbar appears. Change from `resize-none` with no max-height to:
-- `max-h-[280px]` (approximately 14-15 lines)
-- `overflow-y: auto` for scrolling when content exceeds the limit
+## Technical Detail: Mark Update Logic
 
-## Technical Details
+TipTap doesn't have a direct "update mark attributes" API for existing marks. The approach is:
 
-### Selection Highlight CSS
-```css
-.tiptap ::selection {
-  background-color: hsl(48 96% 89% / 0.8);
-}
-```
-
-### Comment Popover Positioning Strategy
-
-The current layout is:
-```
-[flex-1 overflow-auto (containerRef)]
-  [max-w-3xl mx-auto content]
-    [InlineCommentPopover (absolute, inside content)]
-```
-
-New layout:
-```
-[flex-1 overflow-auto (containerRef)] -- position: relative
-  [max-w-3xl mx-auto content]
-  [InlineCommentPopover (absolute, right side, top aligned to selection)]
-```
-
-The popover will be positioned with:
-- `position: absolute`
-- `top`: calculated from the selection coordinates relative to the scrollable container
-- `right: 16px` (or a small offset from the right edge)
-- This places it in the right margin, outside the `max-w-3xl` content area
-
-### PageEditor handleCommentClick Update
-
-Only compute `top` (no `left`):
 ```typescript
-const coords = editor.view.coordsAtPos(from);
-const container = containerRef.current;
-if (container) {
-  const containerRect = container.getBoundingClientRect();
-  setCommentPopoverPos({
-    top: coords.top - containerRect.top + container.scrollTop,
-  });
-}
+// Find all positions with this commentId mark
+editor.state.doc.descendants((node, pos) => {
+  const mark = node.marks.find(
+    m => m.type.name === 'commentHighlight' && m.attrs.commentId === commentId
+  );
+  if (mark) {
+    // For resolve: remove old mark, apply new one with updated status
+    const from = pos;
+    const to = pos + node.nodeSize;
+    editor.chain()
+      .setTextSelection({ from, to })
+      .unsetMark('commentHighlight')
+      .setMark('commentHighlight', { commentId, status: newStatus })
+      .run();
+  }
+});
+// For delete: just unsetMark without re-applying
 ```
 
-### CommentInput Textarea Max Height
-```tsx
-<Textarea
-  className="min-h-[60px] max-h-[280px] text-sm resize-none overflow-y-auto"
-/>
-```
+After updating marks, call `scheduleSave(title, editor.getHTML())` to persist the change.
 
 ## Files Modified
 
 | File | Change |
 |---|---|
-| `src/index.css` | Add yellow selection highlight for `.tiptap` |
-| `src/components/PageEditor.tsx` | Move popover outside content column, simplify positioning to top-only |
-| `src/components/comments/InlineCommentPopover.tsx` | Update to right-margin layout, accept top-only position |
-| `src/components/comments/CommentInput.tsx` | Add max-height with scroll on textarea |
+| `src/components/PageEditor.tsx` | Add mark update/remove handlers, pass as props to CommentPanel |
+| `src/components/comments/CommentPanel.tsx` | Accept and call new props on resolve/delete actions |
 
