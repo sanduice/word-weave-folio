@@ -9,6 +9,7 @@ import { Color } from "@tiptap/extension-color";
 import { TextStyle } from "@tiptap/extension-text-style";
 import Highlight from "@tiptap/extension-highlight";
 import { usePage, useUpdatePage, useTrackPageOpen, useBacklinks } from "@/hooks/use-pages";
+import { PageIconCoverControls } from "./editor/PageIconCoverControls";
 import { useAppStore } from "@/stores/app-store";
 import { FileText, Link2 } from "lucide-react";
 import { SlashCommandExtension } from "./editor/slash-command";
@@ -216,6 +217,18 @@ export function PageEditor() {
     );
   }
 
+  const handleUpdateIcon = (iconType: string | null, iconValue: string | null) => {
+    if (!selectedPageId) return;
+    updatePage.mutate({ id: selectedPageId, icon_type: iconType, icon_value: iconValue } as any);
+  };
+
+  const handleUpdateCover = (coverType: string | null, coverUrl: string | null, coverPositionY?: number) => {
+    if (!selectedPageId) return;
+    const updates: any = { id: selectedPageId, cover_type: coverType, cover_url: coverUrl };
+    if (coverPositionY !== undefined) updates.cover_position_y = coverPositionY;
+    updatePage.mutate(updates);
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-auto" ref={containerRef}>
       {/* Sticky formatting toolbar — always visible when editing */}
@@ -228,7 +241,22 @@ export function PageEditor() {
           }}
         />
       )}
-      <div className="max-w-3xl mx-auto px-6 py-8 relative">
+
+      {/* Page icon & cover controls */}
+      {page && (
+        <PageIconCoverControls
+          pageId={page.id}
+          iconType={(page as any).icon_type ?? null}
+          iconValue={(page as any).icon_value ?? null}
+          coverType={(page as any).cover_type ?? null}
+          coverUrl={(page as any).cover_url ?? null}
+          coverPositionY={(page as any).cover_position_y ?? 0.5}
+          onUpdateIcon={handleUpdateIcon}
+          onUpdateCover={handleUpdateCover}
+        />
+      )}
+
+      <div className="max-w-3xl mx-auto px-6 py-8 relative w-full">
         {/* Save status */}
         <div className="flex justify-end mb-2">
           <span className="text-[11px] text-muted-foreground/60">

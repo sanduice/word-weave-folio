@@ -56,7 +56,7 @@ export function useCreatePage() {
 export function useUpdatePage() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; title?: string; content?: string; is_favorite?: boolean; parent_id?: string | null; sort_order?: number; folder_id?: string | null }) => {
+    mutationFn: async ({ id, ...updates }: { id: string; title?: string; content?: string; is_favorite?: boolean; parent_id?: string | null; sort_order?: number; folder_id?: string | null; icon_type?: string | null; icon_value?: string | null; cover_type?: string | null; cover_url?: string | null; cover_position_y?: number }) => {
       const { data, error } = await supabase.from("pages").update(updates).eq("id", id).select().single();
       if (error) throw error;
       return data as Page;
@@ -177,6 +177,11 @@ export function useDuplicatePage() {
           parent_id: source.parent_id,
           folder_id: source.folder_id,
           user_id: user.id,
+          icon_type: (source as any).icon_type,
+          icon_value: (source as any).icon_value,
+          cover_type: (source as any).cover_type,
+          cover_url: (source as any).cover_url,
+          cover_position_y: (source as any).cover_position_y,
         })
         .select()
         .single();
