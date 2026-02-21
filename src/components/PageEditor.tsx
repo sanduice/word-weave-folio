@@ -230,8 +230,8 @@ export function PageEditor() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-auto" ref={containerRef}>
-      {/* Sticky formatting toolbar — always visible when editing */}
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Fixed formatting toolbar — always visible at top */}
       {editor && (
         <StickyToolbar
           editor={editor}
@@ -241,6 +241,7 @@ export function PageEditor() {
           }}
         />
       )}
+      <div className="flex-1 flex flex-col overflow-auto" ref={containerRef}>
 
       {/* Page icon & cover controls */}
       {page && (
@@ -339,6 +340,7 @@ export function PageEditor() {
             </div>
           </div>
         )}
+      </div>
       </div>
     </div>
   );
