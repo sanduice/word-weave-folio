@@ -101,8 +101,13 @@ export type Database = {
       pages: {
         Row: {
           content: string
+          cover_position_y: number | null
+          cover_type: string | null
+          cover_url: string | null
           created_at: string
           folder_id: string | null
+          icon_type: string | null
+          icon_value: string | null
           id: string
           is_favorite: boolean
           parent_id: string | null
@@ -114,8 +119,13 @@ export type Database = {
         }
         Insert: {
           content?: string
+          cover_position_y?: number | null
+          cover_type?: string | null
+          cover_url?: string | null
           created_at?: string
           folder_id?: string | null
+          icon_type?: string | null
+          icon_value?: string | null
           id?: string
           is_favorite?: boolean
           parent_id?: string | null
@@ -127,8 +137,13 @@ export type Database = {
         }
         Update: {
           content?: string
+          cover_position_y?: number | null
+          cover_type?: string | null
+          cover_url?: string | null
           created_at?: string
           folder_id?: string | null
+          icon_type?: string | null
+          icon_value?: string | null
           id?: string
           is_favorite?: boolean
           parent_id?: string | null
