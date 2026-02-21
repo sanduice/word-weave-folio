@@ -109,6 +109,7 @@ export function PageEditor() {
   useEffect(() => {
     if (page && editor) {
       setTitle(page.title);
+      titleRef.current = page.title; // sync ref IMMEDIATELY, before setContent
       lastSavedTitle.current = page.title;
       const content = page.content || "";
       lastSavedContent.current = content;
@@ -119,13 +120,27 @@ export function PageEditor() {
     }
   }, [page?.id, page?.content, page?.title]);
 
+  // Cancel pending save when switching pages
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = undefined;
+      }
+    };
+  }, [selectedPageId]);
+
   const scheduleSave = useCallback(
     (newTitle: string, newContent: string) => {
       if (!selectedPageId) return;
+      const targetPageId = selectedPageId; // capture at call time
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       setSaveStatus("saving");
       saveTimerRef.current = setTimeout(async () => {
-        // Guard: never overwrite a real title with empty (stale closure safety)
+        // If user switched pages, abort
+        if (useAppStore.getState().selectedPageId !== targetPageId) {
+          return;
+        }
         const safeTitle = (newTitle === "" && lastSavedTitle.current !== "") ? lastSavedTitle.current : newTitle;
         const updates: any = {};
         if (safeTitle !== lastSavedTitle.current) updates.title = safeTitle;
@@ -134,10 +149,13 @@ export function PageEditor() {
           setSaveStatus("saved");
           return;
         }
-        await updatePage.mutateAsync({ id: selectedPageId, ...updates });
-        lastSavedTitle.current = safeTitle;
-        lastSavedContent.current = newContent;
-        setSaveStatus("saved");
+        await updatePage.mutateAsync({ id: targetPageId, ...updates });
+        // Only update refs if still on the same page
+        if (useAppStore.getState().selectedPageId === targetPageId) {
+          lastSavedTitle.current = safeTitle;
+          lastSavedContent.current = newContent;
+          setSaveStatus("saved");
+        }
       }, 1500);
     },
     [selectedPageId, updatePage],
