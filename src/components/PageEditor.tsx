@@ -377,7 +377,7 @@ export function PageEditor() {
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         <ResizablePanel defaultSize={commentPanelOpen ? 80 : 100} minSize={40}>
           {/* Main editor area */}
-          <div className="h-full overflow-y-auto relative" ref={containerRef}>
+          <div className="h-full overflow-y-auto overflow-x-auto relative" ref={containerRef}>
             {/* Page icon & cover controls */}
             {page && (
               <PageIconCoverControls
@@ -392,7 +392,7 @@ export function PageEditor() {
               />
             )}
 
-            <div className="max-w-3xl mx-auto px-6 py-8 relative w-full">
+            <div className="max-w-3xl mx-auto px-6 py-8 relative w-full" style={{ overflowX: 'visible' }}>
               {/* Save status */}
               <div className="flex justify-end mb-2">
                 <span className="text-[11px] text-muted-foreground/60">
