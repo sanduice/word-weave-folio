@@ -79,10 +79,6 @@ export function TopBar() {
           <Search className="h-4 w-4" />
           <span className="text-xs hidden sm:inline">⌘K</span>
         </Button>
-        <Button variant="default" size="sm" className="h-8 gap-1.5" onClick={handleNewPage} disabled={!selectedSpaceId}>
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">New Page</span>
-        </Button>
       </div>
     </header>
   );
