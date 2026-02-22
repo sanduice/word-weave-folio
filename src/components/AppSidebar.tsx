@@ -27,6 +27,7 @@ import { useSession, useProfile, useLogout } from "@/hooks/use-auth";
 import { SpaceSelector } from "./SpaceSelector";
 import { FolderTree } from "./FolderTree";
 import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp } from "lucide-react";
+import { TodoList } from "./TodoList";
 
 const displayTitle = (title: string) => title?.trim() || "Untitled";
 
@@ -182,6 +183,9 @@ export function AppSidebar() {
             )}
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Todos */}
+        <TodoList />
 
         {/* Favorites */}
         {favorites && favorites.length > 0 && (
