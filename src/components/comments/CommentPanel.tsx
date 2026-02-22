@@ -55,7 +55,7 @@ export function CommentPanel({ pageId, userId, editorHtml, onCommentClick, onRes
   };
 
   return (
-    <div className="comment-panel border-l border-border bg-background flex flex-col">
+    <div className="h-full border-l border-border bg-background flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
