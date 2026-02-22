@@ -141,15 +141,22 @@ export function TableControls({ editor, containerRef }: TableControlsProps) {
       const scrollTop = container.scrollTop;
       const scrollLeft = container.scrollLeft;
 
+      // Find .tableWrapper to clamp positions within visible scroll area
+      const wrapperEl = tableEl.closest('.tableWrapper') as HTMLElement | null;
+      const wrapperRect = wrapperEl ? wrapperEl.getBoundingClientRect() : tableRect;
+
+      const clampedRight = Math.min(tableRect.right, wrapperRect.right);
+      const clampedWidth = Math.min(tableRect.width, wrapperRect.width);
+
       setPos({
         addRow: {
           top: tableRect.bottom - containerRect.top + scrollTop + 2,
           left: tableRect.left - containerRect.left + scrollLeft,
-          width: tableRect.width,
+          width: clampedWidth,
         },
         addCol: {
           top: tableRect.top - containerRect.top + scrollTop,
-          left: tableRect.right - containerRect.left + scrollLeft + 2,
+          left: clampedRight - containerRect.left + scrollLeft + 2,
           height: tableRect.height,
         },
       });
@@ -163,18 +170,20 @@ export function TableControls({ editor, containerRef }: TableControlsProps) {
           rowIndex: i,
           top: rect.top - containerRect.top + scrollTop - 6,
           left: tableRect.left - containerRect.left + scrollLeft - 28,
-          width: tableRect.width,
+          width: clampedWidth,
         });
       }
       setRowGaps(rGaps);
 
-      // Compute column gaps (between columns)
+      // Compute column gaps (between columns), clamped to wrapper
       const firstRow = tableEl.querySelector("tr");
       if (firstRow) {
         const cells = firstRow.querySelectorAll("th, td");
         const cGaps: ColGap[] = [];
         for (let i = 1; i < cells.length; i++) {
           const rect = cells[i].getBoundingClientRect();
+          // Skip gaps that fall outside the visible wrapper area
+          if (rect.left > wrapperRect.right || rect.right < wrapperRect.left) continue;
           cGaps.push({
             colIndex: i,
             top: tableRect.top - containerRect.top + scrollTop - 28,
