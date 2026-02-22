@@ -605,3 +605,58 @@
   z-index: 10;
   pointer-events: none;
 }
+
+/* ── Between-Row/Column Insertion Controls ── */
+.table-insert-zone {
+  position: absolute;
+  z-index: 8;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-insert-zone--row {
+  flex-direction: row;
+}
+
+.table-insert-zone--col {
+  flex-direction: column;
+}
+
+.table-insert-line {
+  position: absolute;
+  background: hsl(var(--primary));
+  border-radius: 1px;
+  pointer-events: none;
+}
+
+.table-insert-line--row {
+  height: 2px;
+  left: 28px;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.table-insert-line--col {
+  width: 2px;
+  top: 28px;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.table-insert-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  z-index: 1;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
