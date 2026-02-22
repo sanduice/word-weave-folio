@@ -198,10 +198,7 @@
   overflow-y: visible;
   max-height: none;
   max-width: none;
-  /* Full-width breakout using CSS variable from JS */
-  width: var(--editor-width, 100%);
-  margin-left: calc(-0.5 * (var(--editor-width, 100%) - 100%));
-  margin-right: calc(-0.5 * (var(--editor-width, 100%) - 100%));
+  width: 100%;
   min-width: 100%;
   margin-top: 1rem;
   margin-bottom: 1rem;
