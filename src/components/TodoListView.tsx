@@ -1,3 +1,4 @@
+import { useState, useRef } from "react";
 import { useTodos, useCreateTodo, useUpdateTodo } from "@/hooks/use-todos";
 import { useAppStore } from "@/stores/app-store";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,29 +15,32 @@ function formatDueDate(dateStr: string) {
   return format(d, "MMM d, yyyy");
 }
 
-function NewTaskRow({ onAdd }: { onAdd: () => void }) {
-  return (
-    <button
-      onClick={onAdd}
-      className="flex items-center gap-3 px-4 py-2.5 w-full text-sm text-muted-foreground hover:bg-accent/50 transition-colors rounded-md"
-    >
-      <Plus className="h-4 w-4" />
-      <span>New task</span>
-    </button>
-  );
-}
-
 export function TodoListView() {
   const { selectedSpaceId, selectedTodoId, setSelectedTodoId, todoFilter, setTodoFilter } = useAppStore();
   const { data: todos } = useTodos(selectedSpaceId ?? undefined, todoFilter);
   const createTodo = useCreateTodo();
   const updateTodo = useUpdateTodo();
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  function handleAdd() {
-    if (!selectedSpaceId) return;
-    createTodo.mutate({ space_id: selectedSpaceId }, {
-      onSuccess: (todo) => setSelectedTodoId(todo.id),
-    });
+  function handleStartAdd() {
+    setIsAddingTask(true);
+    setNewTaskTitle("");
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  function handleCommit() {
+    const title = newTaskTitle.trim();
+    setIsAddingTask(false);
+    setNewTaskTitle("");
+    if (!title || !selectedSpaceId) return;
+    createTodo.mutate({ space_id: selectedSpaceId, title });
+  }
+
+  function handleCancel() {
+    setIsAddingTask(false);
+    setNewTaskTitle("");
   }
 
   function handleToggle(id: string, isDone: boolean) {
@@ -82,7 +86,7 @@ export function TodoListView() {
                 Done
               </button>
             </div>
-            <Button size="sm" onClick={handleAdd} className="gap-1.5">
+            <Button size="sm" onClick={handleStartAdd} className="gap-1.5">
               <Plus className="h-4 w-4" />
               New
             </Button>
@@ -90,13 +94,12 @@ export function TodoListView() {
 
           {/* Task list */}
           <div className="border border-border rounded-lg divide-y divide-border">
-            <NewTaskRow onAdd={handleAdd} />
-            {!todos?.length ? (
+            {!todos?.length && !isAddingTask ? (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                 {todoFilter === "done" ? "No completed tasks" : "No tasks yet — click New to add one"}
               </div>
             ) : (
-              todos.map((todo) => {
+              todos?.map((todo) => {
                 const isDone = todo.status === "done";
                 return (
                   <div
@@ -128,7 +131,31 @@ export function TodoListView() {
                 );
               })
             )}
-            <NewTaskRow onAdd={handleAdd} />
+            {isAddingTask ? (
+              <div className="flex items-center gap-3 px-4 py-2.5">
+                <Checkbox disabled className="h-4 w-4 shrink-0 rounded" />
+                <input
+                  ref={inputRef}
+                  value={newTaskTitle}
+                  onChange={(e) => setNewTaskTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCommit();
+                    if (e.key === "Escape") handleCancel();
+                  }}
+                  onBlur={handleCommit}
+                  placeholder="Task name"
+                  className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/50"
+                />
+              </div>
+            ) : (
+              <button
+                onClick={handleStartAdd}
+                className="flex items-center gap-3 px-4 py-2.5 w-full text-sm text-muted-foreground hover:bg-accent/50 transition-colors rounded-md"
+              >
+                <Plus className="h-4 w-4" />
+                <span>New task</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

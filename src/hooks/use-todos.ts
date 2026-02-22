@@ -26,7 +26,7 @@ export function useTodos(spaceId?: string, filter?: "todo" | "done") {
         .select("*")
         .eq("space_id", spaceId!)
         .order("sort_order", { ascending: true })
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: true });
 
       if (filter === "done") {
         query = query.eq("status", "done");
