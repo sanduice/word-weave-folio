@@ -16,6 +16,7 @@ import { SlashCommandExtension } from "./editor/slash-command";
 import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
 import { SlashCommandMenu } from "./editor/SlashCommandMenu";
 import { TableToolbar } from "./editor/TableToolbar";
+import { TableControls } from "./editor/TableControls";
 import { BubbleMenuToolbar } from "./editor/BubbleMenuToolbar";
 import { StickyToolbar } from "./editor/StickyToolbar";
 import { CommentHighlight } from "./editor/comment-mark";
@@ -70,7 +71,7 @@ export function PageEditor() {
       Highlight.configure({ multicolor: true }),
       SlashCommandExtension,
       CommentHighlight,
-      Table.configure({ resizable: false }),
+      Table.configure({ resizable: true, cellMinWidth: 120 }),
       TableRow,
       TableHeader,
       TableCell.extend({
@@ -423,6 +424,9 @@ export function PageEditor() {
 
               {/* Table toolbar */}
               {editor && <TableToolbar editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
+
+              {/* Table hover controls (add row/column) */}
+              {editor && <TableControls editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
 
               {/* Slash command menu */}
               {editor && <SlashCommandMenu editor={editor} />}
