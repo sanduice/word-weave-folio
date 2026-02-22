@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Trash2 } from "lucide-react";
+import { CalendarIcon, Trash2, X } from "lucide-react";
 import { format, isToday, isYesterday, isTomorrow } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { Todo } from "@/hooks/use-todos";
@@ -50,10 +50,12 @@ export function TodoDetail() {
     }
   }, [todo?.id, todo?.title, todo?.description]);
 
+  if (!selectedTodoId) return null;
+
   if (!todo) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        Select a todo to view details
+      <div className="w-[400px] border-l border-border bg-background flex items-center justify-center text-muted-foreground text-sm">
+        Loading...
       </div>
     );
   }
@@ -71,8 +73,19 @@ export function TodoDetail() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-2xl mx-auto px-8 py-12">
+    <div className="w-[400px] border-l border-border bg-background flex flex-col shrink-0 overflow-y-auto animate-in slide-in-from-right-4 duration-200">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 pt-6 pb-2">
+        <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Task Details</span>
+        <button
+          onClick={() => setSelectedTodoId(null)}
+          className="p-1 rounded-sm hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="px-6 py-4 flex-1">
         {/* Title */}
         <input
           value={title}
@@ -80,7 +93,7 @@ export function TodoDetail() {
           onBlur={commitTitle}
           onKeyDown={(e) => e.key === "Enter" && commitTitle()}
           placeholder="Untitled"
-          className="w-full text-3xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/40 mb-6"
+          className="w-full text-xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/40 mb-6"
         />
 
         {/* Properties */}
