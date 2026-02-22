@@ -1,51 +1,27 @@
 
 
-# Table with Own Scrollbar and Full-Width Breakout
+# Table: Left-Aligned Growth with Own Scrollbar
 
-## Problem
+## Behavior
 
-Currently the `.tableWrapper` uses `overflow-x: visible` which means the table visually breaks out but has no scrollbar of its own. The user wants:
+- Table starts aligned with the content body (left edge matches content left edge)
+- As columns are added, the table grows to the **right only** -- it does NOT expand to the left
+- The `.tableWrapper` has `overflow-x: auto` so a horizontal scrollbar appears at the bottom of the table when it exceeds the editor panel width
+- The scrollbar is always visible when the table overflows (using `overflow-x: scroll` or CSS to force visibility)
 
-1. A horizontal scrollbar directly beneath the table (not at the page level)
-2. The table to expand to the left as well as the right, using the full editor panel width (like Notion)
+## Current Problem
 
-## Solution
+The current CSS uses symmetric negative margins (`margin-left: calc(-0.5 * ...)`) which centers the breakout. The `--editor-width` variable makes the wrapper span the full panel. This causes the table to expand equally left and right, which is not what the user wants.
 
-### 1. CSS: Make `.tableWrapper` break out of `max-w-3xl` symmetrically and add its own scrollbar
+## Plan
 
-**File: `src/index.css`**
+### 1. `src/index.css` -- Simplify `.tableWrapper`
 
-The `.tableWrapper` needs to:
-- Break out of the `max-w-3xl` (768px) container to span the full editor panel width
-- Have `overflow-x: auto` so it gets its own horizontal scrollbar when the table is wider than the panel
-- Use negative margins to escape the content column equally on both sides
-
-Since the editor is inside a panel (not full viewport), we cannot use `100vw`. Instead we use a CSS approach where the wrapper calculates how much to break out relative to its parent:
-
-```css
-.tiptap .tableWrapper {
-  overflow-x: auto;       /* scrollbar on the table itself */
-  overflow-y: visible;
-  max-height: none;
-  max-width: none;
-  width: calc(100vw - var(--sidebar-width, 0px));  /* won't work reliably */
-  ...
-}
-```
-
-A more robust approach: use JavaScript to measure the `containerRef` width and set a CSS custom property, then use that for the wrapper width. But the simplest pure-CSS approach is:
-
-- On the `max-w-3xl` content div, set a CSS variable `--content-padding` equal to the `px-6` (24px)
-- On `.tableWrapper`, use negative margins to break out to the edges of the scroll container:
-  ```css
-  margin-left: calc(-1 * (50cqw - 50%));   /* requires container query -- not ideal */
-  ```
-
-**Simplest robust approach**: Remove `max-w-3xl` constraint from `.tableWrapper` by making it position itself relative to the scroll container (`containerRef`) rather than the content div. This is done by:
-
-- Moving the `.tableWrapper` width to `calc(100% + 2 * var(--editor-pad, 24px))` with matching negative margins
-- Reverting `.tableWrapper` to `overflow-x: auto` for its own scrollbar
-- Removing `overflow-x: auto` from the outer container (no page-level scrollbar needed)
+Remove the symmetric breakout logic entirely. The table wrapper should:
+- Stay left-aligned with the content body by default
+- Have no max-width constraint so it can grow with its table content
+- Use `overflow-x: auto` (or `overflow-x: scroll` for always-visible scrollbar)
+- Width should be `100%` of the content column -- the table inside will push wider via `min-width: fit-content` on the `<table>`
 
 ```css
 .tiptap .tableWrapper {
@@ -53,47 +29,10 @@ A more robust approach: use JavaScript to measure the `containerRef` width and s
   overflow-y: visible;
   max-height: none;
   max-width: none;
-  /* Break out of px-6 (24px) padding on both sides */
-  margin-left: -24px;
-  margin-right: -24px;
-  width: calc(100% + 48px);
-  min-width: calc(100% + 48px);
-  border-radius: 0.375rem;
-  border: 1px solid hsl(var(--border));
-  position: relative;
-  box-sizing: border-box;
-}
-```
-
-This makes the table wrapper stretch to the full width of the `max-w-3xl` container plus its padding, effectively reaching the edges of the content column. But we want it to go even further -- to the edges of the entire editor panel.
-
-**Best approach**: Use a JS-driven CSS variable set on `containerRef` that tells the wrapper how wide the scroll container is, then the wrapper can size itself to that width.
-
-### Final approach (JS + CSS hybrid)
-
-1. In `PageEditor.tsx`, measure `containerRef` width and set a CSS variable `--editor-width` on it using a ResizeObserver
-2. In CSS, the `.tableWrapper` uses this variable to calculate its full breakout width with negative margins
-3. The wrapper gets `overflow-x: auto` for its own scrollbar
-
-### 2. PageEditor.tsx changes
-
-- Add a `ResizeObserver` on `containerRef` that sets `--editor-width` CSS variable on the container element
-- Revert the outer container to `overflow-x: hidden` (no page-level scrollbar)
-- Keep `overflow-x: visible` on the `max-w-3xl` div so the wrapper can visually escape
-
-### 3. CSS changes
-
-```css
-.tiptap .tableWrapper {
-  overflow-x: auto;
-  overflow-y: visible;
-  max-height: none;
-  max-width: none;
-  /* Full-width breakout using CSS variable from JS */
-  width: var(--editor-width, 100%);
-  margin-left: calc(-0.5 * (var(--editor-width, 100%) - 100%));
-  margin-right: calc(-0.5 * (var(--editor-width, 100%) - 100%));
+  width: 100%;
   min-width: 100%;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
   border: 1px solid hsl(var(--border));
   border-radius: 0.375rem;
   position: relative;
@@ -101,15 +40,27 @@ This makes the table wrapper stretch to the full width of the `max-w-3xl` contai
 }
 ```
 
-### 4. TableControls clamping
+Remove the `--editor-width` variable usage and the `margin-left` / `margin-right` calc lines.
 
-Update clamping to use the `.tableWrapper` rect again (since it now has `overflow-x: auto` and acts as the scroll container).
+### 2. `src/components/PageEditor.tsx` -- Remove ResizeObserver
 
-## Files Summary
+- Remove the `useEffect` that sets `--editor-width` CSS variable via ResizeObserver (no longer needed)
+- Keep `overflow-x: hidden` on the outer container (scrollbar belongs to the table wrapper, not the page)
+
+### 3. `src/components/editor/TableControls.tsx` -- No changes needed
+
+The clamping logic already uses `.tableWrapper` bounds (`wrapperRect`), which is correct since the wrapper is the scroll container.
+
+## Technical Details
 
 | File | Change |
 |---|---|
-| `src/index.css` | Revert `.tableWrapper` to `overflow-x: auto`, add full-width breakout using CSS variable |
-| `src/components/PageEditor.tsx` | Add ResizeObserver to set `--editor-width` CSS variable, revert outer container to `overflow-x: hidden` |
-| `src/components/editor/TableControls.tsx` | Update clamping to use wrapper bounds for scrollbar-contained table |
+| `src/index.css` | Remove `--editor-width` breakout, set `width: 100%`, keep `overflow-x: auto` |
+| `src/components/PageEditor.tsx` | Remove the ResizeObserver `useEffect` for `--editor-width` |
+| `src/components/editor/TableControls.tsx` | No changes |
 
+## Result
+
+- Small tables (few columns): fit within content body, no scrollbar
+- Wide tables (many columns): table grows rightward, scrollbar appears at the bottom of the table
+- Left edge of the table always stays aligned with the content column left edge
