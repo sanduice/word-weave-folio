@@ -17,6 +17,7 @@ import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table
 import { SlashCommandMenu } from "./editor/SlashCommandMenu";
 import { TableToolbar } from "./editor/TableToolbar";
 import { TableControls } from "./editor/TableControls";
+import { TableDragControls } from "./editor/TableDragControls";
 import { BubbleMenuToolbar } from "./editor/BubbleMenuToolbar";
 import { StickyToolbar } from "./editor/StickyToolbar";
 import { CommentHighlight } from "./editor/comment-mark";
@@ -427,6 +428,9 @@ export function PageEditor() {
 
               {/* Table hover controls (add row/column) */}
               {editor && <TableControls editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
+
+              {/* Table drag controls (reorder/remove rows & columns) */}
+              {editor && <TableDragControls editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
 
               {/* Slash command menu */}
               {editor && <SlashCommandMenu editor={editor} />}
