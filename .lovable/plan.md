@@ -1,29 +1,45 @@
 
-# Make Todo Detail Panel Resizable (Like Comment Panel)
 
-## What Changes
+# Untitled UI Design System Implementation
 
-The Todo detail sidebar currently has a fixed width of 400px. This will be updated to use resizable panels (same approach as the comment panel on pages), making it draggable and allowing a wider max size.
+Apply the Untitled UI design language across the entire app: updated color tokens with #9e77ed as brand/primary, Open Sans font, and smaller button sizing.
 
-## Changes to Make
+## Changes
 
-### File: `src/components/TodoListView.tsx`
+### 1. Add Open Sans font (index.html)
+Add Google Fonts `<link>` for Open Sans (weights 400, 500, 600, 700).
 
-1. Import `ResizablePanelGroup`, `ResizablePanel`, and `ResizableHandle` from `@/components/ui/resizable`
-2. Wrap the todo list content and the `TodoDetail` in a `ResizablePanelGroup` with `direction="horizontal"`
-3. The main todo list becomes a `ResizablePanel` with `defaultSize` of 100 when no todo is selected, or ~70 when one is open, and `minSize={40}`
-4. The `TodoDetail` becomes a `ResizablePanel` with `defaultSize={30}`, `minSize={20}`, `maxSize={50}` -- giving it more room than the comment panel's max of 30
-5. A `ResizableHandle` separator is placed between them for dragging
+### 2. Update CSS variables to Untitled UI palette (src/index.css)
+- **Primary** (brand): `259 70% 70%` (derived from #9e77ed) with white foreground
+- **Ring**: match primary purple
+- **Sidebar primary/ring**: match brand purple
+- Slightly warmer grays aligned with Untitled UI's neutral palette (gray-100 through gray-900)
+- Update body `font-family` from Inter to `"Open Sans"`
 
-### File: `src/components/TodoDetail.tsx`
+### 3. Smaller button system (src/components/ui/button.tsx)
+Reduce all sizes by one step:
+| Size | Current | New |
+|------|---------|-----|
+| default | h-10 px-4 py-2 | h-8 px-3 py-1.5 |
+| sm | h-9 px-3 | h-7 px-2.5 |
+| lg | h-11 px-8 | h-9 px-5 |
+| icon | h-10 w-10 | h-8 w-8 |
 
-1. Remove the fixed `w-[400px]` class from the outer div
-2. Change it to `w-full h-full` since the resizable panel now controls sizing
-3. Remove `shrink-0` since the panel handles that
+Also reduce base `text-sm` to `text-xs` for sm, keep `text-sm` for default/lg. Reduce SVG icon size from `size-4` to `size-3.5`.
 
-## Technical Notes
+## Files Modified
 
-- The comment panel uses `defaultSize={20}`, `minSize={15}`, `maxSize={30}` (percentage-based)
-- The todo detail will use `defaultSize={30}`, `minSize={20}`, `maxSize={50}` for a wider max
-- Panel size can optionally be persisted to localStorage (like the comment panel does)
-- The `ResizableHandle` provides the drag interaction automatically
+| File | Change |
+|------|--------|
+| `index.html` | Add Open Sans Google Font link |
+| `src/index.css` | Update CSS custom properties for Untitled UI colors + Open Sans font-family |
+| `src/components/ui/button.tsx` | Reduce button heights, padding, and icon sizes |
+
+## Technical Details
+
+**#9e77ed to HSL**: RGB(158, 119, 237) converts to approximately HSL(260, 77%, 70%). The CSS variable will be `260 77% 70%`.
+
+**Untitled UI neutral palette**: Uses slightly warm grays. The existing gray variables will shift to use `240 5%` base hue/saturation instead of `220 10%`, giving a cleaner, more neutral feel matching Untitled UI's aesthetic.
+
+**Font loading**: Open Sans loaded via Google Fonts CDN with `display=swap` for performance. Weights 400 (normal), 500 (medium), 600 (semibold), 700 (bold).
+
