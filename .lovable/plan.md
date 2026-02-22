@@ -1,155 +1,226 @@
 
 
-# Notion-Style Table Interactions and Scrolling
+# Drag-to-Reorder and Drag-to-Remove for Table Rows and Columns
 
 ## Overview
 
-Enhance the existing TipTap table with Notion-like UX: click-to-add rows/columns via hover controls, independent table scrolling (vertical and horizontal), column resizing, and improved styling. This is scoped to what TipTap's table extension supports natively plus targeted CSS/React enhancements.
+Add Notion-style drag handles to table rows and columns that allow users to reorder by dragging, and remove by dragging outside the table boundary. This builds on the existing `TableControls` component and table CSS.
 
-## What's Already in Place
+## Approach
 
-- TipTap Table extension with `resizable: false`
-- TableToolbar component (floating toolbar with row/column/cell operations)
-- Table CSS styles with fixed layout, cell borders, header styling
-- Slash command to insert 3x3 tables
+Since TipTap has no built-in drag-to-reorder for rows/columns, we build a custom React overlay component that:
+- Renders drag grip handles on hover (6-dot icon)
+- Uses pointer events (not HTML5 drag API) for smoother control
+- Manipulates ProseMirror document structure via transactions to swap rows/columns
+- Detects drops outside table bounds for removal
 
-## Phased Approach
+## New Component: `TableDragControls`
 
-Given the scope, this is split into two phases. Phase 1 covers the high-impact items; Phase 2 covers drag interactions (future).
+**File: `src/components/editor/TableDragControls.tsx` (new)**
 
----
+This component renders:
+1. **Row drag handles**: A 6-dot grip icon on the left side of each row, visible on hover
+2. **Column drag handles**: A 6-dot grip icon above each column header, visible on hover
+3. **Drop indicators**: A horizontal line (for rows) or vertical line (for columns) showing where the item will land
+4. **Delete zone indicator**: A red highlight when dragging outside the table boundary
 
-## Phase 1 (This Implementation)
+### Row Reorder Logic
 
-### 1. Enable Column Resizing
+```text
+[grip] | Cell 1 | Cell 2 | Cell 3 |   <-- drag this grip
+       |--------|--------|--------|
+       | Cell 4 | Cell 5 | Cell 6 |   <-- drop indicator line appears here
+       |--------|--------|--------|
+       | Cell 7 | Cell 8 | Cell 9 |
+```
+
+- On pointer down on a row grip: capture the row index and start tracking
+- On pointer move: calculate which row gap the pointer is nearest to, show a blue insertion line
+- On pointer up inside table: execute a ProseMirror transaction that removes the row from its old position and inserts it at the new position
+- On pointer up outside table (vertically): show delete confirmation, then remove the row
+
+The ProseMirror transaction for row reorder:
+1. Find the table node in the document
+2. Get the row node at the source index
+3. Create a new table node with rows reordered
+4. Replace the old table node with the new one using `tr.replaceWith()`
+
+### Column Reorder Logic
+
+```text
+       [grip]   [grip]   [grip]
+       | Col 1 | Col 2 | Col 3 |
+       |--------|--------|--------|
+       | Cell 4 | Cell 5 | Cell 6 |
+```
+
+- Similar pointer event tracking but horizontal
+- On drop: for each row in the table, swap the cells at the source and target column indices
+- This is done in a single ProseMirror transaction that rebuilds all rows with swapped cell positions
+
+### Drag-to-Remove
+
+- When the pointer moves more than 60px outside the table boundary (up/down for rows, left/right for columns):
+  - Show a red "remove" indicator on the dragged item
+  - On pointer up: use `editor.chain().focus().deleteRow()` or `deleteColumn()`
+  - Guard against removing the last row or last column (show a toast warning instead)
+
+## Component Integration
 
 **File: `src/components/PageEditor.tsx`**
 
-- Change `Table.configure({ resizable: false })` to `Table.configure({ resizable: true })`
-- The TipTap table extension already has built-in column resize handles (the `.column-resize-handle` CSS is already in `index.css`)
-- Min column width enforced via TipTap's `cellMinWidth` option (default 25px, set to 120px)
+- Import and render `TableDragControls` alongside the existing `TableControls` and `TableToolbar`
+- Pass `editor` and `containerRef` props (same pattern as existing table components)
 
-### 2. Table Scroll Container
+## Styling
 
 **File: `src/index.css`**
 
-Wrap tables in a scroll container so wide tables scroll horizontally without breaking page layout, and tall tables scroll vertically with sticky headers.
-
-- Add `overflow-x: auto` to the table wrapper (TipTap wraps tables in a `div.tableWrapper`)
-- Add `max-height` with `overflow-y: auto` for vertical scrolling on large tables
-- Make `thead` sticky within the scroll container
-- Remove `table-layout: fixed` (let columns size naturally with resize)
+Add styles for:
+- `.table-drag-handle`: the grip icon container (positioned absolutely left of rows / above columns)
+- `.table-drag-indicator`: the blue insertion line shown during drag
+- `.table-drag-delete-zone`: red overlay when dragging outside bounds
+- `.table-row-dragging`: opacity reduction on the row being dragged
 
 ```css
-/* Table scroll container */
-.tiptap .tableWrapper {
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: 70vh;
-  margin: 1rem 0;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.375rem;
+/* Drag handle grip */
+.table-drag-handle {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: hsl(var(--muted-foreground));
+  border-radius: 0.25rem;
+  z-index: 5;
 }
 
-.tiptap .tableWrapper table {
-  margin: 0; /* remove outer margin, container handles it */
-  border: none; /* container has border */
+.table-drag-handle:hover,
+.table-drag-handle:active {
+  opacity: 1;
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
 }
 
-/* Sticky header row */
-.tiptap .tableWrapper thead th {
-  position: sticky;
+/* Show handles when hovering table */
+.tiptap .tableWrapper:hover .table-drag-handle {
+  opacity: 0.4;
+}
+
+/* Drop indicator line */
+.table-drag-indicator {
+  position: absolute;
+  background: hsl(var(--primary));
+  z-index: 10;
+  pointer-events: none;
+  border-radius: 1px;
+}
+
+/* Row indicator: horizontal line */
+.table-drag-indicator--row {
+  height: 2px;
+  left: 0;
+}
+
+/* Column indicator: vertical line */
+.table-drag-indicator--col {
+  width: 2px;
   top: 0;
-  z-index: 2;
+}
+
+/* Delete zone visual */
+.table-drag-delete-indicator {
+  position: absolute;
+  background: hsl(var(--destructive) / 0.1);
+  border: 1px dashed hsl(var(--destructive) / 0.5);
+  border-radius: 0.25rem;
+  z-index: 10;
+  pointer-events: none;
 }
 ```
-
-### 3. "Add Row" Button Below Table
-
-**File: `src/components/editor/TableControls.tsx` (new file)**
-
-A React component that renders a "+" button below the table when the cursor is inside it. Clicking it adds a row at the bottom.
-
-- Positioned below the table DOM element (similar to how `TableToolbar` positions itself)
-- Shows on hover near the table bottom edge
-- Full-width subtle bar with "+" icon
-- On click: `editor.chain().focus().addRowAfter().run()` (after moving cursor to last row)
-
-### 4. "Add Column" Button on Table Right Edge
-
-Same component renders a "+" button on the right edge of the table for adding columns.
-
-- Vertical bar along right edge, visible on hover
-- On click: `editor.chain().focus().addColumnAfter().run()` (after moving cursor to last column)
-
-### 5. Row/Column Hover Indicators
-
-**File: `src/index.css`**
-
-- On row hover: subtle left-border highlight
-- On column header hover: subtle bottom highlight
-- These are CSS-only enhancements using `:hover` pseudo-classes
-
-### 6. Update Table Toolbar
-
-**File: `src/components/editor/TableToolbar.tsx`**
-
-- No structural changes needed -- the existing toolbar already handles add/delete row/column
-- The new "+" controls complement (not replace) the toolbar
-
-## Changes Summary
-
-| File | Change |
-|---|---|
-| `src/components/PageEditor.tsx` | Enable `resizable: true`, set `cellMinWidth: 120` |
-| `src/components/editor/TableControls.tsx` | New component: "+" buttons for adding rows/columns on hover |
-| `src/index.css` | Table scroll container, sticky headers, hover highlights, remove fixed layout |
 
 ## Technical Details
 
-### Table Scroll Container
+### Finding Table Structure in ProseMirror
 
-TipTap's table extension wraps every `<table>` in a `<div class="tableWrapper">`. We style this div to be the scroll container:
+The component needs to map DOM positions to ProseMirror node positions:
 
-- `overflow-x: auto` -- horizontal scroll when columns exceed container width
-- `overflow-y: auto` with `max-height: 70vh` -- vertical scroll for very tall tables
-- `thead th { position: sticky; top: 0 }` -- header stays visible during vertical scroll
-- Table width changes to `min-width: 100%` instead of `width: 100%` so it can grow wider than the container
+1. Find the table node: walk up from current selection to find `table` node type
+2. Get row positions: iterate table children (each is a `tableRow`)
+3. Get column count: count cells in first row
+4. For each row/column, get the DOM element via `editor.view.nodeDOM(pos)` to calculate handle positions
 
-### TableControls Component
+### Row Reorder Transaction
 
-```text
-[Table Content]
-[─────────── + ───────────]  <-- Add Row button (full width, below table)
-                          |
-                          +  <-- Add Column button (vertical, right edge)
+```typescript
+function reorderRow(editor: Editor, tablePos: number, fromIndex: number, toIndex: number) {
+  const { tr } = editor.state;
+  const table = editor.state.doc.nodeAt(tablePos);
+  if (!table) return;
+
+  const rows: Node[] = [];
+  table.forEach((row) => rows.push(row));
+
+  // Remove from old position, insert at new
+  const [moved] = rows.splice(fromIndex, 1);
+  rows.splice(toIndex > fromIndex ? toIndex - 1 : toIndex, 0, moved);
+
+  // Build new table node
+  const newTable = table.type.create(table.attrs, rows);
+  tr.replaceWith(tablePos, tablePos + table.nodeSize, newTable);
+  editor.view.dispatch(tr);
+}
 ```
 
-The component:
-- Uses the same position-tracking pattern as `TableToolbar` (finds the table DOM element relative to the container)
-- Renders two buttons: one below the table, one to the right
-- Only visible when cursor is inside the table
-- Uses `onMouseDown` + `preventDefault` to avoid stealing editor focus
+### Column Reorder Transaction
 
-### Column Resize
+```typescript
+function reorderColumn(editor: Editor, tablePos: number, fromCol: number, toCol: number) {
+  const { tr } = editor.state;
+  const table = editor.state.doc.nodeAt(tablePos);
+  if (!table) return;
 
-Enabling `resizable: true` on the Table extension activates TipTap's built-in column resize. The `.column-resize-handle` CSS is already defined in `index.css`. Setting `cellMinWidth: 120` ensures columns don't get too narrow.
+  const newRows: Node[] = [];
+  table.forEach((row) => {
+    const cells: Node[] = [];
+    row.forEach((cell) => cells.push(cell));
+    const [moved] = cells.splice(fromCol, 1);
+    cells.splice(toCol > fromCol ? toCol - 1 : toCol, 0, moved);
+    newRows.push(row.type.create(row.attrs, cells));
+  });
 
-### Scroll Isolation Rules
+  const newTable = table.type.create(table.attrs, newRows);
+  tr.replaceWith(tablePos, tablePos + table.nodeSize, newTable);
+  editor.view.dispatch(tr);
+}
+```
 
-- Table horizontal scroll is contained within `.tableWrapper` -- page never scrolls horizontally
-- Table vertical scroll is contained within `.tableWrapper` when `max-height` is exceeded
-- Main editor content scrolls independently (already handled by the resizable panel layout)
-- Scrolling inside a table does not propagate to the page (CSS `overflow: auto` on the wrapper handles this)
+### Position Tracking
 
-## Phase 2 (Future -- Not in This Implementation)
+The component recalculates handle positions on:
+- Editor `transaction` events (content changes)
+- Editor `selectionUpdate` events
+- Container scroll events
+- Pointer move during active drag
 
-These require custom ProseMirror plugins and are significantly more complex:
+Positions are calculated relative to the `containerRef` (same pattern as `TableControls` and `TableToolbar`).
 
-- Drag to reorder rows/columns (requires custom drag-and-drop handling in ProseMirror)
-- Drag to remove rows/columns (drag outside boundary)
-- Row/column insertion between existing rows via hover indicator
-- Row virtualization for 200+ row tables
-- Cell copy-paste support
-- Keyboard navigation between cells (Tab/Shift+Tab/Arrow keys)
+### Edge Cases
+
+- **Dragging header row**: Prevented -- the first row (header) cannot be reordered
+- **Single row/column**: Cannot remove the last row or last column -- show toast warning
+- **Scroll during drag**: Handle positions update during drag via scroll listener
+- **Undo/redo**: All reorder and remove operations go through ProseMirror transactions, so they are automatically part of the undo history
+
+## Files Summary
+
+| File | Change |
+|---|---|
+| `src/components/editor/TableDragControls.tsx` | New component: drag handles, reorder logic, remove logic |
+| `src/components/PageEditor.tsx` | Import and render `TableDragControls` |
+| `src/index.css` | Drag handle, indicator, and delete zone styles |
 
