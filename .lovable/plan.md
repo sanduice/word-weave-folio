@@ -1,52 +1,32 @@
 
 
-# Add Rich Text Editor to Todo Detail Panel
+# Fix New Task Behavior: Bottom Placement + Inline Creation
 
-## Overview
+## Issues
 
-Replace the plain `<Textarea>` for the todo description with the same TipTap rich-text editor used in PageEditor. This gives todo descriptions the same editing capabilities as pages: slash commands, formatting toolbar, bubble menu, headings, lists, code blocks, tables, etc.
+1. **New tasks appear at the top** because the query orders by `created_at DESC`. They should appear at the bottom.
+2. **Clicking "New task" should show an inline editable input** right where the button is, rather than immediately creating a database row and opening the drawer.
 
-## What Changes
+## Changes
 
-### 1. TodoDetail.tsx -- Replace Textarea with TipTap Editor
+### 1. Fix sort order (`src/hooks/use-todos.ts`)
 
-The current plain `<Textarea>` for description (lines 197-206) will be replaced with a full TipTap `EditorContent` setup, including:
+Change the query's `created_at` order from `descending: false` (which means DESC) to `ascending: true` so newer tasks appear at the bottom of the list.
 
-- **TipTap editor instance** with the same extensions as PageEditor: StarterKit, Placeholder, TaskList, TaskItem, Link, TextStyle, Color, Highlight, SlashCommandExtension, Table extensions
-- **Slash command menu** (`<SlashCommandMenu />`) for block insertion via `/`
-- **Bubble menu toolbar** (`<BubbleMenuToolbar />`) for selection-based formatting
-- **Debounced auto-save** -- saves description HTML to the database after ~1.5s of inactivity (same pattern as PageEditor)
+### 2. Add inline "New task" input (`src/components/TodoListView.tsx`)
 
-### 2. Auto-save Logic
+- Add a state variable `isAddingTask` (boolean) and `newTaskTitle` (string)
+- When the user clicks "New task" (bottom row) or the "New" button, instead of immediately calling `createTodo`, set `isAddingTask = true`
+- The bottom "New task" row transforms into an inline input field (checkbox + text input) with auto-focus
+- Pressing **Enter** or clicking away (blur) commits: creates the todo with the typed title, appends it to the bottom, and resets the input
+- Pressing **Escape** cancels and hides the input
+- Remove the top "New task" row -- keep only the bottom one for a cleaner layout
+- After creation, the new task appears at the bottom of the list (due to the sort order fix)
 
-- The editor's `onUpdate` callback triggers a debounced save of `editor.getHTML()` to the `description` field
-- When switching between todos (`selectedTodoId` changes), the editor content reloads and pending saves are cancelled
-- The description column already stores TEXT, which will now contain HTML instead of plain text
-
-### 3. Compact Layout Adjustments
-
-Since the detail panel is narrower (400px) than the page editor, the editor will:
-- Use a smaller prose class (`prose-sm`)
-- Skip the StickyToolbar (the bubble menu provides sufficient formatting access)
-- Include SlashCommandMenu for block insertion
-- Have a minimum height placeholder area
-
-## Files to Modify
+### 3. Files to modify
 
 | File | Change |
 |---|---|
-| `src/components/TodoDetail.tsx` | Replace `<Textarea>` with TipTap editor, add slash commands and bubble menu, add debounced auto-save logic |
-
-## No Database Changes Needed
-
-The `description` column is already `TEXT` type, which can store HTML content. No migration required.
-
-## Technical Details
-
-- Import and configure the same TipTap extensions used in `PageEditor.tsx` (StarterKit, Placeholder, TaskList/TaskItem, Link, TextStyle, Color, Highlight, SlashCommandExtension, Table)
-- Use `useEditor` hook with `onUpdate` wired to a debounced save function
-- Load content via `editor.commands.setContent()` when `todo.id` or `todo.description` changes
-- Cancel pending save timers on todo switch (same pattern as PageEditor's `selectedPageId` cleanup)
-- Render `<EditorContent />`, `<SlashCommandMenu />`, and `<BubbleMenuToolbar />` in the description area
-- Keep the existing title, properties (status, priority, due date), and delete button unchanged
+| `src/hooks/use-todos.ts` | Change `created_at` order to ascending so new items appear at bottom |
+| `src/components/TodoListView.tsx` | Replace bottom NewTaskRow with inline input; remove top NewTaskRow; add `isAddingTask` state logic |
 
