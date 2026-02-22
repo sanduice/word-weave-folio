@@ -1,73 +1,138 @@
 
+# Three-Pane Resizable Layout with Independent Scrolling
 
-# Fix: Comment Highlights Not Updating on Resolve/Delete
+## Overview
 
-## Problem
+Replace the current flex-based layout with `react-resizable-panels` (already installed) to create a proper three-pane layout: Left Sidebar, Main Content, and Comment Panel. Each pane scrolls independently, and the sidebar and comment panel are resizable via drag handles.
 
-When a comment is resolved or deleted via the CommentPanel, only the database is updated. The TipTap editor marks (`commentHighlight`) are never modified, so the yellow highlight persists in the editor HTML. On page reload, the stale marks remain in the saved content.
+## Current Architecture
 
-## Root Cause
+```text
+SidebarProvider
+  div.flex
+    AppSidebar (Shadcn Sidebar component)
+    div.flex-col
+      TopBar
+      PageEditor
+        StickyToolbar
+        div.flex
+          div.overflow-auto (editor content)
+          CommentPanel (conditionally rendered, no resize)
+```
 
-`CommentPanel` calls `statusMutation.mutate()` and `deleteMutation.mutate()` which update the database but have no access to the TipTap editor instance. The editor marks (which control the highlight color) are never updated or removed.
+## New Architecture
 
-## Solution
+```text
+SidebarProvider
+  div.flex
+    AppSidebar (unchanged -- Shadcn Sidebar handles its own collapse/resize)
+    div.flex-col.flex-1
+      TopBar
+      PageEditor
+        StickyToolbar
+        ResizablePanelGroup (horizontal)
+          ResizablePanel (main editor -- no min, flex=1)
+            div.overflow-y-auto.h-full (editor content)
+          ResizableHandle (when comment panel open)
+          ResizablePanel (comment panel -- min/max constrained)
+            CommentPanel (overflow-y-auto.h-full)
+```
 
-Pass two callback functions from `PageEditor` (which owns the editor instance) to `CommentPanel`:
-
-1. **onResolveComment(commentId, newStatus)** -- finds the mark in the editor and updates its `status` attribute (open -> resolved changes yellow to grey, resolved -> open changes grey to yellow), then triggers a save.
-2. **onDeleteComment(commentId)** -- finds and removes the mark entirely from the editor, then triggers a save.
+**Why not wrap the sidebar too?** The left sidebar uses Shadcn's `Sidebar` component which already has its own collapse/expand behavior. Wrapping it in `ResizablePanelGroup` would conflict with Shadcn's internal width management. Instead, we make the sidebar resizable via CSS `resize` or a custom drag handle, keeping the Shadcn component intact.
 
 ## Changes
 
-### 1. `src/components/PageEditor.tsx`
+### 1. `src/components/PageEditor.tsx` -- Wrap editor + comment panel in ResizablePanelGroup
 
-Add two handler functions that manipulate TipTap marks:
+- Import `ResizablePanelGroup`, `ResizablePanel`, `ResizableHandle` from `@/components/ui/resizable`
+- Replace the current `div.flex` wrapper (line 374) with a `ResizablePanelGroup direction="horizontal"`
+- Main editor content goes in the first `ResizablePanel` with `minSize={40}` (percentage)
+- Comment panel goes in a second `ResizablePanel` with pixel-based constraints converted to percentages:
+  - `minSize={15}` (~280px), `maxSize={30}` (~480px), `defaultSize={20}` (~360px)
+- Add a `ResizableHandle` between them (only when comment panel is open)
+- Both panels get `overflow-y-auto h-full` for independent scrolling
+- Save/restore panel sizes to localStorage
 
-- `handleResolveComment(commentId, status)`: Traverse the editor document, find all text nodes with the `commentHighlight` mark matching the commentId, remove the old mark and re-apply it with the updated `status` attribute. Then trigger `scheduleSave`.
-- `handleDeleteComment(commentId)`: Traverse the editor document, find all text nodes with the matching mark, and remove (unset) the mark from those ranges. Then trigger `scheduleSave`.
+### 2. `src/components/comments/CommentPanel.tsx` -- Scroll isolation
 
-Pass these as new props `onResolveComment` and `onDeleteComment` to `CommentPanel`.
+- Remove the hardcoded width (currently uses CSS class `comment-panel`)
+- Ensure the component fills its parent panel: `h-full flex flex-col`
+- The comments list div already has `overflow-y-auto` -- verify the header stays sticky with `shrink-0`
 
-### 2. `src/components/comments/CommentPanel.tsx`
+### 3. `src/components/AppSidebar.tsx` -- Sidebar resize via CSS
 
-- Accept two new props: `onResolveComment(commentId: string, status: string)` and `onDeleteComment(commentId: string)`.
-- In the Resolve/Reopen button handler: call `onResolveComment` in addition to the existing `statusMutation.mutate()`.
-- In the Delete button handler: call `onDeleteComment` in addition to `deleteMutation.mutate()`.
+- Add `style={{ minWidth: 220, maxWidth: 480 }}` constraints
+- The Shadcn Sidebar already supports collapse -- no structural changes needed
+- The sidebar content already scrolls independently via `SidebarContent` which has built-in overflow
 
-### 3. `src/components/editor/comment-mark.ts`
+### 4. `src/index.css` -- Resize handle styling
 
-No changes needed -- the mark already supports `status` as an attribute.
+- Add subtle styling for the resize handle: hover highlight, `col-resize` cursor
+- Style the comment panel to fill available height
 
-## Technical Detail: Mark Update Logic
+### 5. `src/stores/app-store.ts` -- Persist comment panel width (optional)
 
-TipTap doesn't have a direct "update mark attributes" API for existing marks. The approach is:
+- Add `commentPanelSize` state to store the last used panel size percentage
+- Save to localStorage on resize, restore on mount
 
-```typescript
-// Find all positions with this commentId mark
-editor.state.doc.descendants((node, pos) => {
-  const mark = node.marks.find(
-    m => m.type.name === 'commentHighlight' && m.attrs.commentId === commentId
-  );
-  if (mark) {
-    // For resolve: remove old mark, apply new one with updated status
-    const from = pos;
-    const to = pos + node.nodeSize;
-    editor.chain()
-      .setTextSelection({ from, to })
-      .unsetMark('commentHighlight')
-      .setMark('commentHighlight', { commentId, status: newStatus })
-      .run();
-  }
-});
-// For delete: just unsetMark without re-applying
+## Technical Details
+
+### ResizablePanelGroup Setup
+
+```tsx
+<ResizablePanelGroup direction="horizontal" className="flex-1">
+  <ResizablePanel defaultSize={80} minSize={40}>
+    <div className="h-full overflow-y-auto relative" ref={containerRef}>
+      {/* editor content */}
+    </div>
+  </ResizablePanel>
+  
+  {commentPanelOpen && selectedPageId && user && (
+    <>
+      <ResizableHandle className="w-px bg-border hover:bg-primary/20 transition-colors" />
+      <ResizablePanel 
+        defaultSize={20} 
+        minSize={15} 
+        maxSize={30}
+        onResize={(size) => localStorage.setItem('commentPanelSize', String(size))}
+      >
+        <CommentPanel ... />
+      </ResizablePanel>
+    </>
+  )}
+</ResizablePanelGroup>
 ```
 
-After updating marks, call `scheduleSave(title, editor.getHTML())` to persist the change.
+### Scroll Isolation
+
+Each pane achieves independent scrolling by:
+- Having a fixed height derived from the viewport (`h-full` flowing from `flex-1 overflow-hidden` parent)
+- Using `overflow-y: auto` on its own content area
+- The sticky toolbar sits above the `ResizablePanelGroup`, outside any scroll container
+
+### Width Persistence
+
+```typescript
+// On resize callback
+const handlePanelResize = (size: number) => {
+  localStorage.setItem('comment-panel-size', String(size));
+};
+
+// On mount
+const savedSize = Number(localStorage.getItem('comment-panel-size')) || 20;
+```
+
+### Edge Cases Handled
+
+- **Comment panel toggle**: When panel closes, `ResizablePanel` unmounts; when it reopens, it restores the saved size
+- **Window resize**: `react-resizable-panels` handles this natively with percentage-based sizing
+- **Min content width**: The main editor panel has `minSize={40}` preventing it from being squeezed too small
+- **No editor re-render during resize**: The editor content doesn't re-render on panel resize since only the container width changes (CSS reflow only)
 
 ## Files Modified
 
 | File | Change |
 |---|---|
-| `src/components/PageEditor.tsx` | Add mark update/remove handlers, pass as props to CommentPanel |
-| `src/components/comments/CommentPanel.tsx` | Accept and call new props on resolve/delete actions |
-
+| `src/components/PageEditor.tsx` | Wrap editor + comment panel in ResizablePanelGroup with resize handles |
+| `src/components/comments/CommentPanel.tsx` | Remove hardcoded width, ensure h-full flex layout |
+| `src/index.css` | Add resize handle hover styles |
