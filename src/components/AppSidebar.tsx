@@ -145,6 +145,24 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
+        {/* Todos nav link */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={viewMode === "todos"}
+                  onClick={() => setViewMode("todos")}
+                  className="text-sm"
+                >
+                  <ListTodo className="h-3.5 w-3.5 shrink-0" />
+                  <span>Todos</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         {/* Pages + Folders tree */}
         <SidebarGroup className="flex-1">
           <div className="flex items-center justify-between px-2 pr-1">
@@ -180,24 +198,6 @@ export function AppSidebar() {
                 spaceId={selectedSpaceId ?? ""}
               />
             )}
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Todos nav link */}
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={viewMode === "todos"}
-                  onClick={() => setViewMode("todos")}
-                  className="text-sm"
-                >
-                  <ListTodo className="h-3.5 w-3.5 shrink-0" />
-                  <span>Todos</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
 
