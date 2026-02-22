@@ -490,11 +490,16 @@
   background-color: hsl(var(--muted));
 }
 
-/* ── Comment Panel ── */
-.comment-panel {
-  width: 320px;
-  min-width: 320px;
-  max-width: 320px;
-  height: 100%;
-  overflow: hidden;
+/* ── Resize Handle ── */
+.resize-handle {
+  width: 1px;
+  background: hsl(var(--border));
+  transition: background-color 0.15s, width 0.15s;
+  cursor: col-resize;
+}
+
+.resize-handle:hover,
+.resize-handle[data-resize-handle-active] {
+  width: 3px;
+  background: hsl(var(--primary) / 0.3);
 }

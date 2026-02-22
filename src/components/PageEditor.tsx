@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useState, useRef } from "react";
+import { useEffect, useCallback, useState, useRef, useMemo } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -30,6 +30,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -371,133 +372,145 @@ export function PageEditor() {
         />
       )}
 
-      <div className="flex-1 flex overflow-hidden">
-        {/* Main editor area */}
-        <div className="flex-1 flex flex-col overflow-auto relative" ref={containerRef}>
-          {/* Page icon & cover controls */}
-          {page && (
-            <PageIconCoverControls
-              pageId={page.id}
-              iconType={(page as any).icon_type ?? null}
-              iconValue={(page as any).icon_value ?? null}
-              coverType={(page as any).cover_type ?? null}
-              coverUrl={(page as any).cover_url ?? null}
-              coverPositionY={(page as any).cover_position_y ?? 0.5}
-              onUpdateIcon={handleUpdateIcon}
-              onUpdateCover={handleUpdateCover}
-            />
-          )}
-
-          <div className="max-w-3xl mx-auto px-6 py-8 relative w-full">
-            {/* Save status */}
-            <div className="flex justify-end mb-2">
-              <span className="text-[11px] text-muted-foreground/60">
-                {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : ""}
-              </span>
-            </div>
-
-            {/* Title */}
-            <input
-              value={title}
-              onChange={(e) => handleTitleChange(e.target.value)}
-              className="w-full text-3xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/30 mb-4"
-              placeholder="Untitled"
-            />
-
-            {/* Editor */}
-            <EditorContent editor={editor} />
-
-            {/* Bubble menu toolbar */}
-            {editor && (
-              <BubbleMenuToolbar
-                editor={editor}
-                onLinkClick={(existingUrl) => {
-                  setLinkUrl(existingUrl);
-                  setLinkDialogOpen(true);
-                }}
-                onCommentClick={handleCommentClick}
+      <ResizablePanelGroup direction="horizontal" className="flex-1">
+        <ResizablePanel defaultSize={commentPanelOpen ? 80 : 100} minSize={40}>
+          {/* Main editor area */}
+          <div className="h-full overflow-y-auto relative" ref={containerRef}>
+            {/* Page icon & cover controls */}
+            {page && (
+              <PageIconCoverControls
+                pageId={page.id}
+                iconType={(page as any).icon_type ?? null}
+                iconValue={(page as any).icon_value ?? null}
+                coverType={(page as any).cover_type ?? null}
+                coverUrl={(page as any).cover_url ?? null}
+                coverPositionY={(page as any).cover_position_y ?? 0.5}
+                onUpdateIcon={handleUpdateIcon}
+                onUpdateCover={handleUpdateCover}
               />
             )}
 
-            {/* Table toolbar */}
-            {editor && <TableToolbar editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
-
-            {/* Slash command menu */}
-            {editor && <SlashCommandMenu editor={editor} />}
-
-            {/* Link dialog */}
-            <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Insert Link</DialogTitle>
-                </DialogHeader>
-                <Input
-                  value={linkUrl}
-                  onChange={(e) => setLinkUrl(e.target.value)}
-                  placeholder="https://..."
-                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } }}
-                  autoFocus
-                />
-                <DialogFooter>
-                  <Button variant="ghost" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
-                  <Button onClick={applyLink}>Apply</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-
-            {/* Backlinks */}
-            {backlinks && backlinks.length > 0 && (
-              <div className="mt-12 pt-6 border-t border-border">
-                <h4 className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-3 flex items-center gap-1.5">
-                  <Link2 className="h-3 w-3" />
-                  Referenced in
-                </h4>
-                <div className="space-y-1">
-                  {backlinks.map((link) => {
-                    const fromPage = link.pages as any;
-                    return (
-                      <button
-                        key={link.from_page_id}
-                        onClick={() => {
-                          if (fromPage?.space_id) useAppStore.getState().setSelectedSpaceId(fromPage.space_id);
-                          setSelectedPageId(link.from_page_id);
-                        }}
-                        className="flex items-center gap-2 text-sm text-primary hover:underline"
-                      >
-                        <FileText className="h-3.5 w-3.5" />
-                        {fromPage?.title || "Unknown page"}
-                      </button>
-                    );
-                  })}
-                </div>
+            <div className="max-w-3xl mx-auto px-6 py-8 relative w-full">
+              {/* Save status */}
+              <div className="flex justify-end mb-2">
+                <span className="text-[11px] text-muted-foreground/60">
+                  {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : ""}
+                </span>
               </div>
-            )}
-          </div>
 
-          {/* Inline comment popover - positioned in right margin */}
-          <InlineCommentPopover
-            position={commentPopoverPos}
-            onSubmit={handleCommentSubmit}
-            onCancel={() => {
-              setCommentPopoverPos(null);
-              setPendingSelection(null);
-            }}
-          />
-        </div>
+              {/* Title */}
+              <input
+                value={title}
+                onChange={(e) => handleTitleChange(e.target.value)}
+                className="w-full text-3xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/30 mb-4"
+                placeholder="Untitled"
+              />
+
+              {/* Editor */}
+              <EditorContent editor={editor} />
+
+              {/* Bubble menu toolbar */}
+              {editor && (
+                <BubbleMenuToolbar
+                  editor={editor}
+                  onLinkClick={(existingUrl) => {
+                    setLinkUrl(existingUrl);
+                    setLinkDialogOpen(true);
+                  }}
+                  onCommentClick={handleCommentClick}
+                />
+              )}
+
+              {/* Table toolbar */}
+              {editor && <TableToolbar editor={editor} containerRef={containerRef as React.RefObject<HTMLDivElement>} />}
+
+              {/* Slash command menu */}
+              {editor && <SlashCommandMenu editor={editor} />}
+
+              {/* Link dialog */}
+              <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Insert Link</DialogTitle>
+                  </DialogHeader>
+                  <Input
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    placeholder="https://..."
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } }}
+                    autoFocus
+                  />
+                  <DialogFooter>
+                    <Button variant="ghost" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
+                    <Button onClick={applyLink}>Apply</Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+
+              {/* Backlinks */}
+              {backlinks && backlinks.length > 0 && (
+                <div className="mt-12 pt-6 border-t border-border">
+                  <h4 className="text-xs uppercase tracking-wider text-muted-foreground/60 mb-3 flex items-center gap-1.5">
+                    <Link2 className="h-3 w-3" />
+                    Referenced in
+                  </h4>
+                  <div className="space-y-1">
+                    {backlinks.map((link) => {
+                      const fromPage = link.pages as any;
+                      return (
+                        <button
+                          key={link.from_page_id}
+                          onClick={() => {
+                            if (fromPage?.space_id) useAppStore.getState().setSelectedSpaceId(fromPage.space_id);
+                            setSelectedPageId(link.from_page_id);
+                          }}
+                          className="flex items-center gap-2 text-sm text-primary hover:underline"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          {fromPage?.title || "Unknown page"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Inline comment popover - positioned in right margin */}
+            <InlineCommentPopover
+              position={commentPopoverPos}
+              onSubmit={handleCommentSubmit}
+              onCancel={() => {
+                setCommentPopoverPos(null);
+                setPendingSelection(null);
+              }}
+            />
+          </div>
+        </ResizablePanel>
 
         {/* Comment panel */}
         {commentPanelOpen && selectedPageId && user && (
-          <CommentPanel
-            pageId={selectedPageId}
-            userId={user.id}
-            editorHtml={editor?.getHTML() || ""}
-            onCommentClick={handleCommentPanelClick}
-            onResolveComment={handleResolveComment}
-            onDeleteComment={handleDeleteComment}
-            onClose={() => setCommentPanelOpen(false)}
-          />
+          <>
+            <ResizableHandle className="resize-handle" />
+            <ResizablePanel
+              defaultSize={20}
+              minSize={15}
+              maxSize={30}
+              onResize={(size) => localStorage.setItem('comment-panel-size', String(size))}
+            >
+              <CommentPanel
+                pageId={selectedPageId}
+                userId={user.id}
+                editorHtml={editor?.getHTML() || ""}
+                onCommentClick={handleCommentPanelClick}
+                onResolveComment={handleResolveComment}
+                onDeleteComment={handleDeleteComment}
+                onClose={() => setCommentPanelOpen(false)}
+              />
+            </ResizablePanel>
+          </>
         )}
-      </div>
+      </ResizablePanelGroup>
     </div>
   );
 }
