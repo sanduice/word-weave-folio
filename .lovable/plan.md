@@ -1,32 +1,34 @@
 
 
-# Fix New Task Behavior: Bottom Placement + Inline Creation
-
-## Issues
-
-1. **New tasks appear at the top** because the query orders by `created_at DESC`. They should appear at the bottom.
-2. **Clicking "New task" should show an inline editable input** right where the button is, rather than immediately creating a database row and opening the drawer.
+# Todo List UI Improvements + Drag Reordering
 
 ## Changes
 
-### 1. Fix sort order (`src/hooks/use-todos.ts`)
+### 1. Remove outer border/outline from task list
+Remove the `border border-border rounded-lg` classes from the task list container div (line 96). Keep only `divide-y divide-border` for row separators.
 
-Change the query's `created_at` order from `descending: false` (which means DESC) to `ascending: true` so newer tasks appear at the bottom of the list.
+### 2. Make todo titles semibold
+Change the title `<span>` from `text-sm` to `text-sm font-semibold` (line 119).
 
-### 2. Add inline "New task" input (`src/components/TodoListView.tsx`)
+### 3. Smaller checkboxes
+Reduce checkbox size from `h-4 w-4` to `h-3.5 w-3.5` on both the task row checkbox (line 116) and the inline add checkbox (line 136).
 
-- Add a state variable `isAddingTask` (boolean) and `newTaskTitle` (string)
-- When the user clicks "New task" (bottom row) or the "New" button, instead of immediately calling `createTodo`, set `isAddingTask = true`
-- The bottom "New task" row transforms into an inline input field (checkbox + text input) with auto-focus
-- Pressing **Enter** or clicking away (blur) commits: creates the todo with the typed title, appends it to the bottom, and resets the input
-- Pressing **Escape** cancels and hides the input
-- Remove the top "New task" row -- keep only the bottom one for a cleaner layout
-- After creation, the new task appears at the bottom of the list (due to the sort order fix)
+### 4. Add drag handle for reordering
+- Add a `GripVertical` icon (from lucide-react) to the left of each todo row, visible on hover
+- Implement drag-and-drop reordering using native HTML drag events (no new dependency needed)
+- On drop, reorder the list locally and persist the new `sort_order` values to the database via `useUpdateTodo`
 
-### 3. Files to modify
+## Files to Modify
 
 | File | Change |
 |---|---|
-| `src/hooks/use-todos.ts` | Change `created_at` order to ascending so new items appear at bottom |
-| `src/components/TodoListView.tsx` | Replace bottom NewTaskRow with inline input; remove top NewTaskRow; add `isAddingTask` state logic |
+| `src/components/TodoListView.tsx` | Remove outer border, semibold titles, smaller checkboxes, add drag handle + reorder logic |
+
+## Technical Details
+
+- Drag handles use `draggable` attribute on each row with `onDragStart`, `onDragOver`, `onDrop` handlers
+- The drag handle (GripVertical icon) appears with `opacity-0 group-hover:opacity-100` so it only shows on row hover
+- On drop, compute new `sort_order` values for affected items and batch-update via `useUpdateTodo`
+- Each row gets `group` class for the hover-reveal pattern
+- The reorder persists by updating each moved todo's `sort_order` field in the database
 
