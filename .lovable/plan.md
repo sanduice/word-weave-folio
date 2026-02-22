@@ -1,34 +1,29 @@
 
+# Make Todo Detail Panel Resizable (Like Comment Panel)
 
-# Todo List UI Improvements + Drag Reordering
+## What Changes
 
-## Changes
+The Todo detail sidebar currently has a fixed width of 400px. This will be updated to use resizable panels (same approach as the comment panel on pages), making it draggable and allowing a wider max size.
 
-### 1. Remove outer border/outline from task list
-Remove the `border border-border rounded-lg` classes from the task list container div (line 96). Keep only `divide-y divide-border` for row separators.
+## Changes to Make
 
-### 2. Make todo titles semibold
-Change the title `<span>` from `text-sm` to `text-sm font-semibold` (line 119).
+### File: `src/components/TodoListView.tsx`
 
-### 3. Smaller checkboxes
-Reduce checkbox size from `h-4 w-4` to `h-3.5 w-3.5` on both the task row checkbox (line 116) and the inline add checkbox (line 136).
+1. Import `ResizablePanelGroup`, `ResizablePanel`, and `ResizableHandle` from `@/components/ui/resizable`
+2. Wrap the todo list content and the `TodoDetail` in a `ResizablePanelGroup` with `direction="horizontal"`
+3. The main todo list becomes a `ResizablePanel` with `defaultSize` of 100 when no todo is selected, or ~70 when one is open, and `minSize={40}`
+4. The `TodoDetail` becomes a `ResizablePanel` with `defaultSize={30}`, `minSize={20}`, `maxSize={50}` -- giving it more room than the comment panel's max of 30
+5. A `ResizableHandle` separator is placed between them for dragging
 
-### 4. Add drag handle for reordering
-- Add a `GripVertical` icon (from lucide-react) to the left of each todo row, visible on hover
-- Implement drag-and-drop reordering using native HTML drag events (no new dependency needed)
-- On drop, reorder the list locally and persist the new `sort_order` values to the database via `useUpdateTodo`
+### File: `src/components/TodoDetail.tsx`
 
-## Files to Modify
+1. Remove the fixed `w-[400px]` class from the outer div
+2. Change it to `w-full h-full` since the resizable panel now controls sizing
+3. Remove `shrink-0` since the panel handles that
 
-| File | Change |
-|---|---|
-| `src/components/TodoListView.tsx` | Remove outer border, semibold titles, smaller checkboxes, add drag handle + reorder logic |
+## Technical Notes
 
-## Technical Details
-
-- Drag handles use `draggable` attribute on each row with `onDragStart`, `onDragOver`, `onDrop` handlers
-- The drag handle (GripVertical icon) appears with `opacity-0 group-hover:opacity-100` so it only shows on row hover
-- On drop, compute new `sort_order` values for affected items and batch-update via `useUpdateTodo`
-- Each row gets `group` class for the hover-reveal pattern
-- The reorder persists by updating each moved todo's `sort_order` field in the database
-
+- The comment panel uses `defaultSize={20}`, `minSize={15}`, `maxSize={30}` (percentage-based)
+- The todo detail will use `defaultSize={30}`, `minSize={20}`, `maxSize={50}` for a wider max
+- Panel size can optionally be persisted to localStorage (like the comment panel does)
+- The `ResizableHandle` provides the drag interaction automatically
