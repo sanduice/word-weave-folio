@@ -505,6 +505,7 @@ export function PageEditor() {
               defaultSize={20}
               minSize={15}
               maxSize={30}
+              className="overflow-hidden"
               onResize={(size) => localStorage.setItem('comment-panel-size', String(size))}
             >
               <CommentPanel
