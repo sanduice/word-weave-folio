@@ -1,11 +1,12 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useTodos, useCreateTodo, useUpdateTodo } from "@/hooks/use-todos";
 import { useAppStore } from "@/stores/app-store";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Plus, ListTodo, CheckSquare } from "lucide-react";
+import { Plus, ListTodo, CheckSquare, GripVertical } from "lucide-react";
 import { format, isToday, isYesterday, isTomorrow } from "date-fns";
 import { TodoDetail } from "./TodoDetail";
+import type { Todo } from "@/hooks/use-todos";
 
 function formatDueDate(dateStr: string) {
   const d = new Date(dateStr + "T00:00:00");
@@ -23,6 +24,8 @@ export function TodoListView() {
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   function handleStartAdd() {
     setIsAddingTask(true);
@@ -51,16 +54,31 @@ export function TodoListView() {
     });
   }
 
+  const handleDrop = useCallback(
+    (dropIdx: number) => {
+      if (dragIdx === null || dragIdx === dropIdx || !todos) return;
+      const reordered = [...todos];
+      const [moved] = reordered.splice(dragIdx, 1);
+      reordered.splice(dropIdx, 0, moved);
+      // Persist new sort_order for all affected items
+      reordered.forEach((todo, i) => {
+        if (todo.sort_order !== i) {
+          updateTodo.mutate({ id: todo.id, sort_order: i });
+        }
+      });
+      setDragIdx(null);
+      setDragOverIdx(null);
+    },
+    [dragIdx, todos, updateTodo]
+  );
+
   return (
     <div className="flex-1 flex min-w-0">
-      {/* Main list area */}
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-3xl mx-auto px-8 py-12">
-          {/* Header */}
           <h1 className="text-3xl font-bold text-foreground mb-1">Todo List</h1>
           <p className="text-muted-foreground text-sm mb-8">Stay organized with tasks, your way.</p>
 
-          {/* Tabs + New button */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-1">
               <button
@@ -92,31 +110,46 @@ export function TodoListView() {
             </Button>
           </div>
 
-          {/* Task list */}
-          <div className="border border-border rounded-lg divide-y divide-border">
+          <div className="divide-y divide-border">
             {!todos?.length && !isAddingTask ? (
               <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                 {todoFilter === "done" ? "No completed tasks" : "No tasks yet — click New to add one"}
               </div>
             ) : (
-              todos?.map((todo) => {
+              todos?.map((todo, idx) => {
                 const isDone = todo.status === "done";
                 return (
                   <div
                     key={todo.id}
+                    draggable
+                    onDragStart={() => setDragIdx(idx)}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDragOverIdx(idx);
+                    }}
+                    onDragLeave={() => setDragOverIdx(null)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleDrop(idx);
+                    }}
+                    onDragEnd={() => {
+                      setDragIdx(null);
+                      setDragOverIdx(null);
+                    }}
                     onClick={() => setSelectedTodoId(todo.id)}
-                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors hover:bg-accent/50 ${
+                    className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors group hover:bg-accent/50 ${
                       selectedTodoId === todo.id ? "bg-accent" : ""
-                    }`}
+                    } ${dragOverIdx === idx ? "border-t-2 border-primary" : ""}`}
                   >
+                    <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab" />
                     <Checkbox
                       checked={isDone}
                       onCheckedChange={() => handleToggle(todo.id, isDone)}
                       onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4 shrink-0 rounded"
+                      className="h-3.5 w-3.5 shrink-0 rounded"
                     />
                     <span
-                      className={`flex-1 text-sm truncate ${
+                      className={`flex-1 text-sm font-semibold truncate ${
                         isDone ? "line-through text-muted-foreground/60" : ""
                       } ${!todo.title?.trim() ? "italic text-muted-foreground/50" : ""}`}
                     >
@@ -133,7 +166,8 @@ export function TodoListView() {
             )}
             {isAddingTask ? (
               <div className="flex items-center gap-3 px-4 py-2.5">
-                <Checkbox disabled className="h-4 w-4 shrink-0 rounded" />
+                <div className="h-4 w-4 shrink-0" />
+                <Checkbox disabled className="h-3.5 w-3.5 shrink-0 rounded" />
                 <input
                   ref={inputRef}
                   value={newTaskTitle}
@@ -144,7 +178,7 @@ export function TodoListView() {
                   }}
                   onBlur={handleCommit}
                   placeholder="Task name"
-                  className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/50"
+                  className="flex-1 text-sm font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
                 />
               </div>
             ) : (
@@ -152,6 +186,7 @@ export function TodoListView() {
                 onClick={handleStartAdd}
                 className="flex items-center gap-3 px-4 py-2.5 w-full text-sm text-muted-foreground hover:bg-accent/50 transition-colors rounded-md"
               >
+                <div className="h-4 w-4 shrink-0" />
                 <Plus className="h-4 w-4" />
                 <span>New task</span>
               </button>
@@ -160,7 +195,6 @@ export function TodoListView() {
         </div>
       </div>
 
-      {/* Detail drawer */}
       <TodoDetail />
     </div>
   );
