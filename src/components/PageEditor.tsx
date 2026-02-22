@@ -375,7 +375,7 @@ export function PageEditor() {
         />
       )}
 
-      <ResizablePanelGroup direction="horizontal" className="flex-1">
+      <ResizablePanelGroup direction="horizontal" className="flex-1 !overflow-hidden">
         <ResizablePanel defaultSize={commentPanelOpen ? 80 : 100} minSize={40}>
           {/* Main editor area */}
           <div className="h-full overflow-y-auto overflow-x-hidden relative" ref={containerRef}>
