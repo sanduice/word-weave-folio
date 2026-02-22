@@ -50,6 +50,18 @@ export function PageEditor() {
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Set --editor-width CSS variable on container for table breakout
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(([entry]) => {
+      const w = entry.contentRect.width;
+      el.style.setProperty('--editor-width', `${w}px`);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const lastSavedContent = useRef<string>("");
   const lastSavedTitle = useRef<string>("");
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
@@ -377,7 +389,7 @@ export function PageEditor() {
       <ResizablePanelGroup direction="horizontal" className="flex-1">
         <ResizablePanel defaultSize={commentPanelOpen ? 80 : 100} minSize={40}>
           {/* Main editor area */}
-          <div className="h-full overflow-y-auto overflow-x-auto relative" ref={containerRef}>
+          <div className="h-full overflow-y-auto overflow-x-hidden relative" ref={containerRef}>
             {/* Page icon & cover controls */}
             {page && (
               <PageIconCoverControls
