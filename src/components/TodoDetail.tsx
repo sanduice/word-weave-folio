@@ -159,7 +159,7 @@ export function TodoDetail() {
 
   if (!todo) {
     return (
-      <div className="w-[400px] border-l border-border bg-background flex items-center justify-center text-muted-foreground text-sm">
+      <div className="w-full h-full border-l border-border bg-background flex items-center justify-center text-muted-foreground text-sm">
         Loading...
       </div>
     );
@@ -174,7 +174,7 @@ export function TodoDetail() {
   }
 
   return (
-    <div className="w-[400px] border-l border-border bg-background flex flex-col shrink-0 overflow-y-auto animate-in slide-in-from-right-4 duration-200">
+    <div className="w-full h-full border-l border-border bg-background flex flex-col overflow-y-auto animate-in slide-in-from-right-4 duration-200">
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-6 pb-2">
         <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Task Details</span>
