@@ -1,14 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
+import TaskList from "@tiptap/extension-task-list";
+import TaskItem from "@tiptap/extension-task-item";
+import LinkExtension from "@tiptap/extension-link";
+import { Color } from "@tiptap/extension-color";
+import { TextStyle } from "@tiptap/extension-text-style";
+import Highlight from "@tiptap/extension-highlight";
+import { Table, TableRow, TableHeader, TableCell } from "@tiptap/extension-table";
+import { SlashCommandExtension } from "./editor/slash-command";
+import { SlashCommandMenu } from "./editor/SlashCommandMenu";
+import { BubbleMenuToolbar } from "./editor/BubbleMenuToolbar";
 import { useAppStore } from "@/stores/app-store";
 import { useTodos, useUpdateTodo, useDeleteTodo } from "@/hooks/use-todos";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Trash2, X } from "lucide-react";
+import { CalendarIcon, Trash2, X, Link2 } from "lucide-react";
 import { format, isToday, isYesterday, isTomorrow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import type { Todo } from "@/hooks/use-todos";
 
 const priorityColors: Record<string, string> = {
@@ -41,14 +55,105 @@ export function TodoDetail() {
   const todo = todos?.find((t) => t.id === selectedTodoId);
 
   const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  const lastSavedDescription = useRef<string>("");
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState("");
 
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3, 4, 5, 6] },
+        link: false,
+      }),
+      Placeholder.configure({ placeholder: "Add a description... (use / for commands)" }),
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      LinkExtension.configure({ openOnClick: true }),
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
+      SlashCommandExtension,
+      Table.configure({ resizable: true, cellMinWidth: 100 }),
+      TableRow,
+      TableHeader,
+      TableCell.extend({
+        addAttributes() {
+          return {
+            ...this.parent?.(),
+            backgroundColor: {
+              default: null,
+              parseHTML: (el) => (el as HTMLElement).style.backgroundColor || null,
+              renderHTML: (attrs) => {
+                if (!attrs.backgroundColor) return {};
+                return { style: `background-color: ${attrs.backgroundColor}` };
+              },
+            },
+          };
+        },
+      }),
+    ],
+    content: "",
+    editorProps: {
+      attributes: {
+        class: "prose prose-sm max-w-none focus:outline-none min-h-[120px] px-0 py-2",
+      },
+    },
+    onUpdate: ({ editor: e }) => {
+      scheduleDescriptionSave(e.getHTML());
+    },
+  });
+
+  // Load todo content into editor
   useEffect(() => {
-    if (todo) {
+    if (todo && editor) {
       setTitle(todo.title);
-      setDescription(todo.description ?? "");
+      const desc = todo.description ?? "";
+      lastSavedDescription.current = desc;
+      if (editor.getHTML() !== desc) {
+        editor.commands.setContent(desc || "");
+      }
     }
-  }, [todo?.id, todo?.title, todo?.description]);
+  }, [todo?.id, todo?.description, todo?.title]);
+
+  // Cancel pending save when switching todos
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = undefined;
+      }
+    };
+  }, [selectedTodoId]);
+
+  const scheduleDescriptionSave = useCallback(
+    (html: string) => {
+      if (!selectedTodoId) return;
+      const targetId = selectedTodoId;
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(async () => {
+        if (useAppStore.getState().selectedTodoId !== targetId) return;
+        if (html !== lastSavedDescription.current) {
+          await updateTodo.mutateAsync({ id: targetId, description: html });
+          if (useAppStore.getState().selectedTodoId === targetId) {
+            lastSavedDescription.current = html;
+          }
+        }
+      }, 1500);
+    },
+    [selectedTodoId, updateTodo],
+  );
+
+  const applyLink = () => {
+    if (!editor) return;
+    if (linkUrl) {
+      editor.chain().focus().setLink({ href: linkUrl }).run();
+    } else {
+      editor.chain().focus().unsetLink().run();
+    }
+    setLinkDialogOpen(false);
+    setLinkUrl("");
+  };
 
   if (!selectedTodoId) return null;
 
@@ -62,10 +167,6 @@ export function TodoDetail() {
 
   function commitTitle() {
     if (title !== todo!.title) updateTodo.mutate({ id: todo!.id, title });
-  }
-
-  function commitDescription() {
-    if (description !== (todo!.description ?? "")) updateTodo.mutate({ id: todo!.id, description });
   }
 
   function handleDelete() {
@@ -194,16 +295,46 @@ export function TodoDetail() {
           </div>
         </div>
 
-        {/* Description */}
-        <div className="mb-8">
+        {/* Description - Rich Text Editor */}
+        <div className="mb-8 relative">
           <span className="text-xs text-muted-foreground block mb-2">Description</span>
-          <Textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={commitDescription}
-            placeholder="Add a description..."
-            className="min-h-[120px] resize-none text-sm"
-          />
+          <div className="border border-border rounded-md p-3 min-h-[120px] focus-within:ring-1 focus-within:ring-ring">
+            <EditorContent editor={editor} />
+          </div>
+
+          {/* Bubble menu toolbar */}
+          {editor && (
+            <BubbleMenuToolbar
+              editor={editor}
+              onLinkClick={(existingUrl) => {
+                setLinkUrl(existingUrl);
+                setLinkDialogOpen(true);
+              }}
+            />
+          )}
+
+          {/* Slash command menu */}
+          {editor && <SlashCommandMenu editor={editor} />}
+
+          {/* Link dialog */}
+          <Dialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Insert Link</DialogTitle>
+              </DialogHeader>
+              <Input
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://..."
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } }}
+                autoFocus
+              />
+              <DialogFooter>
+                <Button variant="ghost" onClick={() => setLinkDialogOpen(false)}>Cancel</Button>
+                <Button onClick={applyLink}>Apply</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Delete */}
