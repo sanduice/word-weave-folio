@@ -141,9 +141,11 @@ export function TableControls({ editor, containerRef }: TableControlsProps) {
       const scrollTop = container.scrollTop;
       const scrollLeft = container.scrollLeft;
 
-      // Clamp positions to the outer scroll container's visible area
-      const clampedRight = Math.min(tableRect.right, containerRect.right);
-      const clampedWidth = Math.min(tableRect.width, containerRect.right - tableRect.left);
+      // Use the tableWrapper (parent of table) as the clamp boundary since it has overflow-x: auto
+      const wrapper = tableEl.closest('.tableWrapper') as HTMLElement | null;
+      const wrapperRect = wrapper ? wrapper.getBoundingClientRect() : tableRect;
+      const clampedRight = Math.min(tableRect.right, wrapperRect.right);
+      const clampedWidth = Math.min(tableRect.width, wrapperRect.right - tableRect.left);
 
       setPos({
         addRow: {
@@ -179,8 +181,8 @@ export function TableControls({ editor, containerRef }: TableControlsProps) {
         const cGaps: ColGap[] = [];
         for (let i = 1; i < cells.length; i++) {
           const rect = cells[i].getBoundingClientRect();
-          // Skip gaps that fall outside the visible container area
-          if (rect.left > containerRect.right || rect.right < containerRect.left) continue;
+          // Skip gaps that fall outside the visible wrapper area
+          if (rect.left > wrapperRect.right || rect.right < wrapperRect.left) continue;
           cGaps.push({
             colIndex: i,
             top: tableRect.top - containerRect.top + scrollTop - 28,

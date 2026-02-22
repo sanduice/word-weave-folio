@@ -194,13 +194,17 @@
 
 /* ── Table scroll container ── */
 .tiptap .tableWrapper {
-  overflow-x: visible;
+  overflow-x: auto;
   overflow-y: visible;
   max-height: none;
   max-width: none;
-  width: fit-content;
+  /* Full-width breakout using CSS variable from JS */
+  width: var(--editor-width, 100%);
+  margin-left: calc(-0.5 * (var(--editor-width, 100%) - 100%));
+  margin-right: calc(-0.5 * (var(--editor-width, 100%) - 100%));
   min-width: 100%;
-  margin: 1rem 0;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
   border: 1px solid hsl(var(--border));
   border-radius: 0.375rem;
   position: relative;
