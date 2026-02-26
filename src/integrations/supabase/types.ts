@@ -339,6 +339,47 @@ export type Database = {
         }
         Relationships: []
       }
+      todo_lists: {
+        Row: {
+          created_at: string
+          icon: string
+          id: string
+          name: string
+          sort_order: number
+          space_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          icon?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          space_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          icon?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          space_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "todo_lists_space_id_fkey"
+            columns: ["space_id"]
+            isOneToOne: false
+            referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       todos: {
         Row: {
           completed_at: string | null
@@ -351,6 +392,7 @@ export type Database = {
           space_id: string
           status: string
           title: string
+          todo_list_id: string | null
           updated_at: string
           user_id: string
         }
@@ -365,6 +407,7 @@ export type Database = {
           space_id: string
           status?: string
           title?: string
+          todo_list_id?: string | null
           updated_at?: string
           user_id: string
         }
@@ -379,6 +422,7 @@ export type Database = {
           space_id?: string
           status?: string
           title?: string
+          todo_list_id?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -388,6 +432,13 @@ export type Database = {
             columns: ["space_id"]
             isOneToOne: false
             referencedRelation: "spaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "todos_todo_list_id_fkey"
+            columns: ["todo_list_id"]
+            isOneToOne: false
+            referencedRelation: "todo_lists"
             referencedColumns: ["id"]
           },
         ]

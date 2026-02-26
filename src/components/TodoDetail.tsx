@@ -47,8 +47,8 @@ function formatDueDate(dateStr: string) {
 }
 
 export function TodoDetail() {
-  const { selectedTodoId, selectedSpaceId, setSelectedTodoId } = useAppStore();
-  const { data: todos } = useTodos(selectedSpaceId ?? undefined);
+  const { selectedTodoId, selectedTodoListId, setSelectedTodoId } = useAppStore();
+  const { data: todos } = useTodos(selectedTodoListId ?? undefined);
   const updateTodo = useUpdateTodo();
   const deleteTodo = useDeleteTodo();
 

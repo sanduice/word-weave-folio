@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback } from "react";
 import { useTodos, useCreateTodo, useUpdateTodo } from "@/hooks/use-todos";
+import { useTodoLists, useUpdateTodoList, useDeleteTodoList } from "@/hooks/use-todo-lists";
 import { useAppStore } from "@/stores/app-store";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
-import { Plus, ListTodo, CheckSquare, GripVertical } from "lucide-react";
+import { Plus, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { format, isToday, isYesterday, isTomorrow } from "date-fns";
 import { TodoDetail } from "./TodoDetail";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
@@ -18,15 +19,22 @@ function formatDueDate(dateStr: string) {
 }
 
 export function TodoListView() {
-  const { selectedSpaceId, selectedTodoId, setSelectedTodoId, todoFilter, setTodoFilter } = useAppStore();
-  const { data: todos } = useTodos(selectedSpaceId ?? undefined, todoFilter);
+  const { selectedSpaceId, selectedTodoId, setSelectedTodoId, selectedTodoListId, todoFilter, setTodoFilter } = useAppStore();
+  const { data: todoLists } = useTodoLists(selectedSpaceId ?? undefined);
+  const currentList = todoLists?.find((l) => l.id === selectedTodoListId);
+  const { data: todos } = useTodos(selectedTodoListId ?? undefined, todoFilter);
   const createTodo = useCreateTodo();
   const updateTodo = useUpdateTodo();
+  const updateList = useUpdateTodoList();
+  const deleteList = useDeleteTodoList();
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const renameRef = useRef<HTMLInputElement>(null);
 
   function handleStartAdd() {
     setIsAddingTask(true);
@@ -38,8 +46,8 @@ export function TodoListView() {
     const title = newTaskTitle.trim();
     setIsAddingTask(false);
     setNewTaskTitle("");
-    if (!title || !selectedSpaceId) return;
-    createTodo.mutate({ space_id: selectedSpaceId, title });
+    if (!title || !selectedSpaceId || !selectedTodoListId) return;
+    createTodo.mutate({ space_id: selectedSpaceId, todo_list_id: selectedTodoListId, title });
   }
 
   function handleCancel() {
@@ -55,13 +63,35 @@ export function TodoListView() {
     });
   }
 
+  function handleStartRename() {
+    if (!currentList) return;
+    setRenameValue(currentList.name);
+    setIsRenaming(true);
+    setTimeout(() => renameRef.current?.focus(), 0);
+  }
+
+  function handleCommitRename() {
+    setIsRenaming(false);
+    const name = renameValue.trim();
+    if (!name || !currentList || name === currentList.name) return;
+    updateList.mutate({ id: currentList.id, name });
+  }
+
+  function handleDeleteList() {
+    if (!currentList) return;
+    deleteList.mutate(currentList.id, {
+      onSuccess: () => {
+        useAppStore.getState().setSelectedTodoListId(null);
+      },
+    });
+  }
+
   const handleDrop = useCallback(
     (dropIdx: number) => {
       if (dragIdx === null || dragIdx === dropIdx || !todos) return;
       const reordered = [...todos];
       const [moved] = reordered.splice(dragIdx, 1);
       reordered.splice(dropIdx, 0, moved);
-      // Persist new sort_order for all affected items
       reordered.forEach((todo, i) => {
         if (todo.sort_order !== i) {
           updateTodo.mutate({ id: todo.id, sort_order: i });
@@ -73,13 +103,45 @@ export function TodoListView() {
     [dragIdx, todos, updateTodo]
   );
 
+  if (!selectedTodoListId) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+        Select a todo list from the sidebar, or create a new one.
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex min-w-0">
       <ResizablePanelGroup direction="horizontal">
         <ResizablePanel defaultSize={selectedTodoId ? 70 : 100} minSize={40}>
           <div className="h-full overflow-y-auto">
             <div className="max-w-3xl mx-auto px-8 py-12">
-              <h1 className="text-3xl font-bold text-foreground mb-1">Todo List</h1>
+              {/* List header */}
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-2xl">{currentList?.icon ?? "📋"}</span>
+                {isRenaming ? (
+                  <input
+                    ref={renameRef}
+                    value={renameValue}
+                    onChange={(e) => setRenameValue(e.target.value)}
+                    onBlur={handleCommitRename}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleCommitRename();
+                      if (e.key === "Escape") setIsRenaming(false);
+                    }}
+                    className="text-3xl font-bold bg-transparent outline-none border-b border-primary w-full"
+                  />
+                ) : (
+                  <h1 className="text-3xl font-bold text-foreground">{currentList?.name ?? "Todo List"}</h1>
+                )}
+                <button onClick={handleStartRename} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground" title="Rename list">
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button onClick={handleDeleteList} className="p-1 rounded hover:bg-accent text-destructive hover:text-destructive" title="Delete list">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
               <p className="text-muted-foreground text-sm mb-8">Stay organized with tasks, your way.</p>
 
               <div className="flex items-center justify-between mb-4">
@@ -92,7 +154,6 @@ export function TodoListView() {
                         : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
                     }`}
                   >
-                    <ListTodo className="h-4 w-4" />
                     To Do
                   </button>
                   <button
@@ -103,7 +164,6 @@ export function TodoListView() {
                         : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
                     }`}
                   >
-                    <CheckSquare className="h-4 w-4" />
                     Done
                   </button>
                 </div>
