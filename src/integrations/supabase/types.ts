@@ -499,6 +499,18 @@ export type Database = {
         Args: { _min_permission?: string; _page_id: string; _user_id: string }
         Returns: boolean
       }
+      has_page_edit_access: {
+        Args: { _page_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_page_owner: {
+        Args: { _page_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_page_shared_with: {
+        Args: { _page_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
