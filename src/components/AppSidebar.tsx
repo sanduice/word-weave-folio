@@ -26,13 +26,13 @@ import { useAppStore } from "@/stores/app-store";
 import { useSession, useProfile, useLogout } from "@/hooks/use-auth";
 import { SpaceSelector } from "./SpaceSelector";
 import { FolderTree } from "./FolderTree";
-import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp } from "lucide-react";
+import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp, Home } from "lucide-react";
 import { TodoList } from "./TodoList";
 
 const displayTitle = (title: string) => title?.trim() || "Untitled";
 
 export function AppSidebar() {
-  const { selectedSpaceId, setSelectedSpaceId, setSelectedPageId, selectedPageId, viewMode } = useAppStore();
+  const { selectedSpaceId, setSelectedSpaceId, setSelectedPageId, selectedPageId, viewMode, goHome, selectedTodoListId } = useAppStore();
   const { data: spaces } = useSpaces();
   const { data: pages } = usePages(selectedSpaceId ?? undefined);
   const { data: folders } = useFolders(selectedSpaceId ?? undefined);
@@ -132,6 +132,24 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent>
+        {/* Home button */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  isActive={!selectedPageId && !selectedTodoListId}
+                  onClick={goHome}
+                  className="text-sm font-medium"
+                >
+                  <Home className="h-4 w-4" />
+                  Home
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         {/* Space selector */}
         <SidebarGroup>
           <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground/60">

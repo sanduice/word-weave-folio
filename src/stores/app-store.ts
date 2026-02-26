@@ -19,6 +19,7 @@ interface AppState {
   setTodoFilter: (filter: "todo" | "done") => void;
   viewMode: "pages" | "todos";
   setViewMode: (mode: "pages" | "todos") => void;
+  goHome: () => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -40,4 +41,5 @@ export const useAppStore = create<AppState>((set) => ({
   setTodoFilter: (filter) => set({ todoFilter: filter }),
   viewMode: "pages" as const,
   setViewMode: (mode) => set({ viewMode: mode, ...(mode === "todos" ? { selectedPageId: null } : { selectedTodoId: null }) }),
+  goHome: () => set({ selectedPageId: null, selectedTodoListId: null, selectedTodoId: null, viewMode: "pages" as const }),
 }));
