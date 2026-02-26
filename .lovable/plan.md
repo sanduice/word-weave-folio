@@ -1,45 +1,67 @@
 
 
-# Untitled UI Design System Implementation
+# Multiple Todo Lists Per Space
 
-Apply the Untitled UI design language across the entire app: updated color tokens with #9e77ed as brand/primary, Open Sans font, and smaller button sizing.
+## Overview
+Add the ability to create multiple named todo lists within each space (e.g. "Work", "Personal", "Sprint 1"). Each list contains its own set of tasks. Users can switch between lists in the sidebar and main view.
 
-## Changes
+## Database Changes
 
-### 1. Add Open Sans font (index.html)
-Add Google Fonts `<link>` for Open Sans (weights 400, 500, 600, 700).
+### New table: `todo_lists`
+| Column | Type | Default | Notes |
+|--------|------|---------|-------|
+| id | uuid | gen_random_uuid() | PK |
+| space_id | uuid | — | FK to spaces |
+| user_id | uuid | — | For RLS |
+| name | text | 'Untitled List' | |
+| icon | text | '📋' | Emoji icon |
+| sort_order | integer | 0 | |
+| created_at | timestamptz | now() | |
+| updated_at | timestamptz | now() | |
 
-### 2. Update CSS variables to Untitled UI palette (src/index.css)
-- **Primary** (brand): `259 70% 70%` (derived from #9e77ed) with white foreground
-- **Ring**: match primary purple
-- **Sidebar primary/ring**: match brand purple
-- Slightly warmer grays aligned with Untitled UI's neutral palette (gray-100 through gray-900)
-- Update body `font-family` from Inter to `"Open Sans"`
+RLS: Same pattern as other tables — users can only CRUD their own rows.
 
-### 3. Smaller button system (src/components/ui/button.tsx)
-Reduce all sizes by one step:
-| Size | Current | New |
-|------|---------|-----|
-| default | h-10 px-4 py-2 | h-8 px-3 py-1.5 |
-| sm | h-9 px-3 | h-7 px-2.5 |
-| lg | h-11 px-8 | h-9 px-5 |
-| icon | h-10 w-10 | h-8 w-8 |
+### Modify `todos` table
+- Add column `todo_list_id` (uuid, nullable initially for migration, then required)
+- Migrate existing todos: create a default "Todo List" per space that has todos, assign existing todos to it
 
-Also reduce base `text-sm` to `text-xs` for sm, keep `text-sm` for default/lg. Reduce SVG icon size from `size-4` to `size-3.5`.
+## Code Changes
 
-## Files Modified
+### 1. New hook: `src/hooks/use-todo-lists.ts`
+- `useTodoLists(spaceId)` — fetch all lists for a space
+- `useCreateTodoList()` — create a new list
+- `useUpdateTodoList()` — rename, reorder
+- `useDeleteTodoList()` — delete list (and its todos)
 
-| File | Change |
-|------|--------|
-| `index.html` | Add Open Sans Google Font link |
-| `src/index.css` | Update CSS custom properties for Untitled UI colors + Open Sans font-family |
-| `src/components/ui/button.tsx` | Reduce button heights, padding, and icon sizes |
+### 2. Update `src/hooks/use-todos.ts`
+- Change `useTodos` to accept `todoListId` instead of `spaceId`
+- Filter todos by `todo_list_id`
 
-## Technical Details
+### 3. Update `src/stores/app-store.ts`
+- Add `selectedTodoListId` state and setter
+- When selecting a space, reset `selectedTodoListId`
 
-**#9e77ed to HSL**: RGB(158, 119, 237) converts to approximately HSL(260, 77%, 70%). The CSS variable will be `260 77% 70%`.
+### 4. Update sidebar (`src/components/AppSidebar.tsx`)
+- Replace single "Todos" section with a list of todo lists under each space
+- Each list item is clickable to open that list's view
+- Add "+" button to create a new todo list
+- Allow renaming lists (double-click or context menu)
 
-**Untitled UI neutral palette**: Uses slightly warm grays. The existing gray variables will shift to use `240 5%` base hue/saturation instead of `220 10%`, giving a cleaner, more neutral feel matching Untitled UI's aesthetic.
+### 5. Update `src/components/TodoListView.tsx`
+- Show the selected todo list's name as the heading
+- Filter todos by `selectedTodoListId` instead of space
+- Add a dropdown or breadcrumb showing which list is active
 
-**Font loading**: Open Sans loaded via Google Fonts CDN with `display=swap` for performance. Weights 400 (normal), 500 (medium), 600 (semibold), 700 (bold).
+### 6. Update `src/components/TodoList.tsx` (sidebar component)
+- Show all todo lists for the current space
+- Each list is a clickable item that sets `selectedTodoListId`
+
+### 7. Update `src/components/TodoDetail.tsx`
+- No major changes needed — still works on individual todo items
+
+## Migration Strategy
+1. Create `todo_lists` table with RLS
+2. Add `todo_list_id` column to `todos` (nullable)
+3. SQL migration function: for each space with existing todos, create a default list and assign todos to it
+4. After migration, consider adding a NOT NULL constraint
 
