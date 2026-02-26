@@ -260,7 +260,7 @@ export function FolderItem({
                 onChange={(e) => setRenameValue(e.target.value)}
                 onBlur={handleRenameSubmit}
                 onKeyDown={handleRenameKeyDown}
-                className="flex-1 text-sm h-7"
+                className="flex-1 text-sm md:text-sm h-7"
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (

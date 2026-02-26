@@ -191,7 +191,7 @@ export function TodoDetail() {
           onBlur={commitTitle}
           onKeyDown={(e) => e.key === "Enter" && commitTitle()}
           placeholder="New task"
-          className="w-full text-xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/40 mb-6"
+          className="w-full text-xl md:text-xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/40 mb-6"
         />
 
         {/* Properties */}

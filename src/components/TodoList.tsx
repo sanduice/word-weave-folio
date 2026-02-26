@@ -113,7 +113,7 @@ export function TodoList() {
                           if (e.key === "Enter") commitRename();
                           if (e.key === "Escape") cancelRename();
                         }}
-                        className="w-full text-sm h-7"
+                        className="w-full text-sm md:text-sm h-7"
                       />
                     </div>
                   ) : (
