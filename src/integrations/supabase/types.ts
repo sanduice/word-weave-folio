@@ -180,6 +180,53 @@ export type Database = {
           },
         ]
       }
+      page_shares: {
+        Row: {
+          created_at: string
+          id: string
+          invited_by: string
+          link_access: string
+          page_id: string
+          permission: string
+          share_token: string | null
+          shared_email: string | null
+          shared_with_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invited_by: string
+          link_access?: string
+          page_id: string
+          permission?: string
+          share_token?: string | null
+          shared_email?: string | null
+          shared_with_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invited_by?: string
+          link_access?: string
+          page_id?: string
+          permission?: string
+          share_token?: string | null
+          shared_email?: string | null
+          shared_with_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "page_shares_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pages: {
         Row: {
           content: string
@@ -448,7 +495,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_page_access: {
+        Args: { _min_permission?: string; _page_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

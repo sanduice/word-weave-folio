@@ -3,7 +3,8 @@ import { useSpaces } from "@/hooks/use-spaces";
 import { usePage, useCreatePage } from "@/hooks/use-pages";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Plus, Search, Star, MessageSquare } from "lucide-react";
+import { Plus, Search, Star, MessageSquare, Share2 } from "lucide-react";
+import { ShareDialog } from "@/components/ShareDialog";
 import { useUpdatePage } from "@/hooks/use-pages";
 import { useComments } from "@/hooks/use-comments";
 
@@ -68,6 +69,12 @@ export function TopBar() {
             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={toggleFavorite}>
               <Star className={`h-4 w-4 ${page.is_favorite ? "fill-yellow-400 text-yellow-400" : ""}`} />
             </Button>
+            <ShareDialog pageId={page.id}>
+              <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-muted-foreground">
+                <Share2 className="h-4 w-4" />
+                <span className="hidden sm:inline text-xs">Share</span>
+              </Button>
+            </ShareDialog>
           </>
         )}
         <Button
