@@ -1,25 +1,27 @@
 
 
-# Inline Task Title Editing & Continuous Task Creation
+## Move edit pen icon next to task title
 
-## Changes — all in `src/components/TodoListView.tsx`
+**File**: `src/components/TodoListView.tsx`
 
-### 1. Inline editable task titles with hover pen icon
-- Track `editingTodoId` and `editingTitle` state
-- Replace the static `<span>` for each todo title with: if `editingTodoId === todo.id`, show an `<input>` pre-filled with the title; otherwise show the current `<span>`
-- Add a `<Pencil>` icon button next to the title, visible only on hover (`opacity-0 group-hover:opacity-100`), that sets `editingTodoId` to that todo's id
-- On Enter or blur, call `updateTodo.mutate({ id, title })` and clear `editingTodoId`
-- On Escape, discard changes and clear `editingTodoId`
-- Click on the pencil and the input both call `e.stopPropagation()` to avoid triggering row selection
+**Problem**: The title `<span>` has `flex-1` which stretches it to fill available space, pushing the pencil icon to the far right edge of the row.
 
-### 2. Continuous task creation on Enter
-- Change `handleCommit`: after creating a task, keep `isAddingTask = true` and re-focus the input instead of closing it
-- Flow: user presses Enter → task is created → input clears → cursor stays in input ready for next task
-- Only close the input on Escape or clicking away (blur)
+**Fix**: Wrap the title text and pencil icon together in a `flex-1` container with `flex items-center gap-1`. Remove `flex-1` from the inner `<span>` so the pencil sits right next to the text.
 
-### Files modified
+**Lines 248-268** — change from:
+```
+<span className="flex-1 ...">Title</span>
+<button className="...shrink-0">pencil</button>
+```
+to:
+```
+<div className="flex-1 flex items-center gap-1 min-w-0">
+  <span className="text-sm font-semibold truncate ...">Title</span>
+  <button className="...shrink-0">pencil</button>
+</div>
+```
 
-| File | Change |
-|------|--------|
-| `src/components/TodoListView.tsx` | Add `editingTodoId`/`editingTitle` state, inline edit input per row, hover Pencil button, and keep input open after Enter |
+Same wrapping applies to the inline edit `<input>` branch (lines 225-247) — wrap input + pencil in the same `flex-1` container for consistency.
+
+Single file change, no database or state changes needed.
 
