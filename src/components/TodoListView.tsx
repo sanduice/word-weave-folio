@@ -35,6 +35,9 @@ export function TodoListView() {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState("");
   const renameRef = useRef<HTMLInputElement>(null);
+  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   function handleStartAdd() {
     setIsAddingTask(true);
@@ -42,12 +45,20 @@ export function TodoListView() {
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
-  function handleCommit() {
+  function handleCommit(keepOpen = false) {
     const title = newTaskTitle.trim();
-    setIsAddingTask(false);
     setNewTaskTitle("");
+    if (!keepOpen) {
+      setIsAddingTask(false);
+    }
     if (!title || !selectedSpaceId || !selectedTodoListId) return;
-    createTodo.mutate({ space_id: selectedSpaceId, todo_list_id: selectedTodoListId, title });
+    createTodo.mutate({ space_id: selectedSpaceId, todo_list_id: selectedTodoListId, title }, {
+      onSuccess: () => {
+        if (keepOpen) {
+          setTimeout(() => inputRef.current?.focus(), 0);
+        }
+      },
+    });
   }
 
   function handleCancel() {
@@ -211,13 +222,50 @@ export function TodoListView() {
                           onClick={(e) => e.stopPropagation()}
                           className="h-3.5 w-3.5 shrink-0 rounded"
                         />
-                        <span
-                          className={`flex-1 text-sm font-semibold truncate ${
-                            isDone ? "line-through text-muted-foreground/60" : ""
-                          } ${!todo.title?.trim() ? "italic text-muted-foreground/50" : ""}`}
+                        {editingTodoId === todo.id ? (
+                          <input
+                            ref={editInputRef}
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onBlur={() => {
+                              if (editingTitle.trim() && editingTitle !== todo.title) {
+                                updateTodo.mutate({ id: todo.id, title: editingTitle.trim() });
+                              }
+                              setEditingTodoId(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                if (editingTitle.trim() && editingTitle !== todo.title) {
+                                  updateTodo.mutate({ id: todo.id, title: editingTitle.trim() });
+                                }
+                                setEditingTodoId(null);
+                              }
+                              if (e.key === "Escape") setEditingTodoId(null);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex-1 text-sm font-semibold bg-transparent outline-none border-b border-primary min-w-0"
+                          />
+                        ) : (
+                          <span
+                            className={`flex-1 text-sm font-semibold truncate ${
+                              isDone ? "line-through text-muted-foreground/60" : ""
+                            } ${!todo.title?.trim() ? "italic text-muted-foreground/50" : ""}`}
+                          >
+                            {todo.title?.trim() || "Untitled"}
+                          </span>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingTodoId(todo.id);
+                            setEditingTitle(todo.title ?? "");
+                            setTimeout(() => editInputRef.current?.focus(), 0);
+                          }}
+                          className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                          title="Edit title"
                         >
-                          {todo.title?.trim() || "Untitled"}
-                        </span>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
                         {todo.due_date && (
                           <span className="text-xs text-muted-foreground shrink-0">
                             {formatDueDate(todo.due_date)}
@@ -236,10 +284,10 @@ export function TodoListView() {
                       value={newTaskTitle}
                       onChange={(e) => setNewTaskTitle(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter") handleCommit();
+                        if (e.key === "Enter") { e.preventDefault(); handleCommit(true); }
                         if (e.key === "Escape") handleCancel();
                       }}
-                      onBlur={handleCommit}
+                      onBlur={() => handleCommit(false)}
                       placeholder="Task name"
                       className="flex-1 text-sm font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
                     />
