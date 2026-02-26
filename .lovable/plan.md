@@ -1,62 +1,87 @@
 
 
-# Sidebar Redesign
+# Design System Refactor — shadcn/ui Everywhere + Remove "Notespace/Untitled" Branding
 
-## Current Problems
-1. **Header**: Shows "Notespace" branding instead of active space name like Notion
-2. **Space selector**: Buried as a dropdown inside the content area
-3. **Todo lists**: No context menu (rename, delete, drag) — pages have full 3-dot menus, folders have full menus, but todo lists have nothing
-4. **Search**: Not in sidebar — only accessible via TopBar shortcut
-5. **Inconsistent structure**: Space label section, separate Home button, separate Space dropdown — too many levels
+## Scope
 
-## New Sidebar Layout (Notion-inspired)
+Audit of all components reveals **raw HTML `<button>` and `<input>` elements** used extensively instead of shadcn/ui primitives. The app name "Notespace" still appears in the login page. The placeholder text "Untitled" is used for empty titles throughout.
 
-```text
-┌─────────────────────────┐
-│ 📘 Space Name    ▼  ✏️+ │  ← Header = active space (dropdown to switch/create)
-├─────────────────────────┤
-│ 🔍 Search               │  ← Quick action row
-│ 🏠 Home                 │
-├─────────────────────────┤
-│ TODO LISTS          [+] │  ← Section label
-│   ☑ My Tasks        ··· │  ← Each item gets hover 3-dot menu
-│   ☑ Sprint Board    ··· │    (Rename, Delete)
-├─────────────────────────┤
-│ PAGES            [📄][📁]│  ← Section label with add buttons
-│   📄 Getting Started ···│  ← Existing page tree (unchanged)
-│   📁 Docs            ···│
-├─────────────────────────┤
-│ ⭐ FAVORITES             │  ← Existing favorites (unchanged)
-│   📄 Pinned page         │
-├─────────────────────────┤
-│ 👤 User Name         ▲  │  ← Footer (unchanged)
-└─────────────────────────┘
-```
+## Changes by File
 
-## File Changes
+### 1. `src/pages/LoginPage.tsx`
+- Change app name from **"Notespace"** to **"Wordwrap"** (matches published URL)
+- Update tagline accordingly
 
-### 1. `src/components/AppSidebar.tsx` — Major restructure
-- **Header**: Replace "Notespace" branding with the active space name + icon. Add a dropdown (using existing `SpaceSelector` logic inline) to switch spaces. Add a "new page" quick-create button next to it (like Notion's pencil icon in the screenshot).
-- **Remove** the separate "Space" section with `SpaceSelector` component
-- **Add** Search button row (opens `setSearchOpen(true)`) and Home button as flat menu items at the top
-- Remove the `SidebarGroupLabel` "Space" section entirely
+### 2. `src/components/AppSidebar.tsx`
+- Replace raw icon `<button>` elements (new page, new folder) with shadcn `Button` variant="ghost" size="icon"
+- Replace footer trigger raw `<button>` with shadcn `Button` variant="ghost"
+- Replace favorites drag grip raw `<span>` pattern — keep as-is (grip handles are decorative, not interactive buttons)
 
-### 2. `src/components/TodoList.tsx` — Add context menu parity
-- Add hover-visible `MoreHorizontal` 3-dot menu to each todo list item (matching page items)
-- Menu actions: **Rename** (inline input), **Delete** (with confirmation dialog)
-- Add inline rename state (`renamingId`, `renameValue`) with input on blur/Enter commit, Escape cancel
-- Use existing `useUpdateTodoList` and `useDeleteTodoList` hooks
-- Add `AlertDialog` for delete confirmation
-- When deleting the active todo list, clear `selectedTodoListId`
+### 3. `src/components/TodoListView.tsx`
+- Replace **rename/delete raw buttons** in header with `Button` variant="ghost" size="icon"
+- Replace **filter toggle buttons** (To Do / Done) with shadcn `Tabs` component (`TabsList` + `TabsTrigger`)
+- Replace raw **inline edit `<input>`** elements with shadcn `Input` (styled appropriately for inline use)
+- Replace raw **"New task" add button** row with shadcn `Button` variant="ghost"
+- Replace raw **edit pencil `<button>`** with `Button` variant="ghost" size="icon"
 
-### 3. `src/components/SpaceSelector.tsx` — Refactor for header use
-- Change from a `Select` dropdown to a `DropdownMenu` that renders in the sidebar header
-- Show space icon + name as the trigger
-- List all spaces as menu items, plus "New Space" option at the bottom
-- Keep the existing create-space dialog
+### 4. `src/components/TodoDetail.tsx`
+- Replace raw **title `<input>`** with shadcn `Input` (unstyled variant for seamless look)
+- Replace **close `<button>`** with `Button` variant="ghost" size="icon"
 
-### Technical notes
-- No database changes needed
-- No new hooks needed — all CRUD hooks exist (`useUpdateTodoList`, `useDeleteTodoList`)
-- `group-hover` pattern for 3-dot visibility already established in page/folder items — reuse same classes
+### 5. `src/components/TodoList.tsx`
+- Replace **add button** raw `<button>` with `Button` variant="ghost" size="icon"
+- Replace **3-dot trigger** raw `<button>` with `Button` variant="ghost" size="icon"
+- Replace **rename `<input>`** with shadcn `Input`
+
+### 6. `src/components/FolderItem.tsx`
+- Replace **expand chevron** raw `<button>` with `Button` variant="ghost" size="icon"
+- Replace **3-dot trigger** raw `<button>` with `Button` variant="ghost" size="icon"  
+- Replace **rename `<input>`** with shadcn `Input`
+- Replace **grip `<span>`** — keep decorative (not a button)
+
+### 7. `src/components/PageTree.tsx`
+- Replace **3-dot trigger** raw `<button>` with `Button` variant="ghost" size="icon"
+- Replace **expand chevron** raw `<button>` with `Button` variant="ghost" size="icon"
+- Replace **rename `<input>`** with shadcn `Input`
+
+### 8. `src/components/SpaceSelector.tsx`
+- Replace **emoji picker raw `<button>`** elements with `Button` variant="ghost"
+- Dropdown trigger raw `<button>` is already `asChild` — keep pattern but style with `Button`
+
+### 9. `src/components/TopBar.tsx`
+- Already uses shadcn `Button` — no changes needed
+
+### 10. `src/components/PageEditor.tsx`
+- Replace raw **title `<input>`** with shadcn `Input` (transparent variant)
+
+### 11. `src/components/TodoItem.tsx`
+- Replace raw **rename `<input>`** with shadcn `Input`
+
+### 12. `src/components/SearchDialog.tsx`
+- Already uses shadcn `Dialog` + `Input` — no changes needed
+
+### 13. `src/pages/HomePage.tsx`
+- Replace raw **recent page `<button>`** cards with shadcn `Card` + `CardContent` (clickable)
+- Replace raw **upcoming todo `<button>`** list items similarly
+- Already uses `Button` and `Card` for other parts — align remaining elements
+
+### 14. `src/index.css`
+- No structural changes — existing CSS variables and editor styles stay
+
+## "Untitled" Removal
+- `displayTitle()` helper in `AppSidebar.tsx`, `PageTree.tsx` — change fallback from `"Untitled"` to empty string `""` or a more subtle placeholder like `"New page"`
+- `TodoListView.tsx` — change `"Untitled"` fallback for todos to `"New task"`
+- `TodoItem.tsx` — same change
+- `HomePage.tsx` — same change for recent pages and upcoming todos
+- `SearchDialog.tsx` — change `"Untitled"` to `"New page"`
+- `PageEditor.tsx` — change placeholder from `"Untitled"` to `"New page"`
+- `TodoDetail.tsx` — change placeholder from `"Untitled"` to `"New task"`
+- `LoginPage.tsx` — remove "Notespace", replace with "Wordwrap"
+
+## Technical Notes
+- No database changes
+- No new dependencies — all shadcn components already installed (`Button`, `Input`, `Tabs`, `Card`, etc.)
+- Tabs component is already installed (`@radix-ui/react-tabs`)
+- All changes are cosmetic/structural — no logic changes
+- Sidebar grip handles and drag behaviors remain unchanged
 
