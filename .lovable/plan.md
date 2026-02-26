@@ -1,55 +1,62 @@
 
 
-# Home Dashboard
+# Sidebar Redesign
 
-## Overview
-Create a Home dashboard as the default landing view when no page or todo list is selected. It shows a greeting, recent pages, quick actions, and upcoming due todos.
+## Current Problems
+1. **Header**: Shows "Notespace" branding instead of active space name like Notion
+2. **Space selector**: Buried as a dropdown inside the content area
+3. **Todo lists**: No context menu (rename, delete, drag) — pages have full 3-dot menus, folders have full menus, but todo lists have nothing
+4. **Search**: Not in sidebar — only accessible via TopBar shortcut
+5. **Inconsistent structure**: Space label section, separate Home button, separate Space dropdown — too many levels
 
-## Approach
-- New component: `src/pages/HomePage.tsx`
-- Render it in `Index.tsx` when neither a page nor a todo list is selected (i.e. `selectedPageId === null && selectedTodoListId === null`)
-- Add a "Home" button at the top of the sidebar that clears selection to return to the dashboard
-- No database changes needed — reuses existing `recent_pages`, `pages`, `todos`, and `profiles` data
+## New Sidebar Layout (Notion-inspired)
 
-## Sections
-
-### 1. Greeting Header
-- Time-based greeting ("Good morning/afternoon/evening") using `new Date().getHours()`
-- Subtitle: "Pick up where you left off"
-- Uses profile `full_name` if available
-
-### 2. Recently Visited (reuses `useRecentPages`)
-- Show up to 8 recent pages as cards with icon, title, space name, and relative time
-- Click opens the page (sets `selectedSpaceId` + `selectedPageId`)
-- Empty state: "No recent pages yet" with a "Create a page" button
-
-### 3. Quick Actions
-- Row of action cards: "New Page", "New Todo List", "Search"
-- Each triggers existing mutations or opens the search dialog
-
-### 4. Upcoming Todos
-- Query todos with `due_date` in the next 7 days, status != done, ordered by due_date
-- New hook `useUpcomingTodos()` — simple query, no schema change
-- Show as a list with title, due date, priority badge
-- Click opens the todo (sets `selectedTodoListId` + `selectedTodoId`)
-- Empty state: "No upcoming deadlines"
+```text
+┌─────────────────────────┐
+│ 📘 Space Name    ▼  ✏️+ │  ← Header = active space (dropdown to switch/create)
+├─────────────────────────┤
+│ 🔍 Search               │  ← Quick action row
+│ 🏠 Home                 │
+├─────────────────────────┤
+│ TODO LISTS          [+] │  ← Section label
+│   ☑ My Tasks        ··· │  ← Each item gets hover 3-dot menu
+│   ☑ Sprint Board    ··· │    (Rename, Delete)
+├─────────────────────────┤
+│ PAGES            [📄][📁]│  ← Section label with add buttons
+│   📄 Getting Started ···│  ← Existing page tree (unchanged)
+│   📁 Docs            ···│
+├─────────────────────────┤
+│ ⭐ FAVORITES             │  ← Existing favorites (unchanged)
+│   📄 Pinned page         │
+├─────────────────────────┤
+│ 👤 User Name         ▲  │  ← Footer (unchanged)
+└─────────────────────────┘
+```
 
 ## File Changes
 
-| File | Change |
-|------|--------|
-| `src/pages/HomePage.tsx` | **New** — greeting, recent pages grid, quick actions, upcoming todos |
-| `src/hooks/use-todos.ts` | Add `useUpcomingTodos()` query (todos due in next 7 days) |
-| `src/pages/Index.tsx` | Show `HomePage` when no page/todoList selected |
-| `src/components/AppSidebar.tsx` | Add "Home" button at top that clears `selectedPageId` and `selectedTodoListId` |
-| `src/stores/app-store.ts` | Add a `goHome()` action that resets page/todo selection |
+### 1. `src/components/AppSidebar.tsx` — Major restructure
+- **Header**: Replace "Notespace" branding with the active space name + icon. Add a dropdown (using existing `SpaceSelector` logic inline) to switch spaces. Add a "new page" quick-create button next to it (like Notion's pencil icon in the screenshot).
+- **Remove** the separate "Space" section with `SpaceSelector` component
+- **Add** Search button row (opens `setSearchOpen(true)`) and Home button as flat menu items at the top
+- Remove the `SidebarGroupLabel` "Space" section entirely
 
-## What's Excluded (future scope)
-- Templates section (no template system exists yet)
-- Learn/Getting Started cards (no help content system yet)
-- Analytics tracking
-- Right panel tips/AI suggestions
-- Customizable layout / reordering sections
+### 2. `src/components/TodoList.tsx` — Add context menu parity
+- Add hover-visible `MoreHorizontal` 3-dot menu to each todo list item (matching page items)
+- Menu actions: **Rename** (inline input), **Delete** (with confirmation dialog)
+- Add inline rename state (`renamingId`, `renameValue`) with input on blur/Enter commit, Escape cancel
+- Use existing `useUpdateTodoList` and `useDeleteTodoList` hooks
+- Add `AlertDialog` for delete confirmation
+- When deleting the active todo list, clear `selectedTodoListId`
 
-These can be layered on once the core dashboard is in place.
+### 3. `src/components/SpaceSelector.tsx` — Refactor for header use
+- Change from a `Select` dropdown to a `DropdownMenu` that renders in the sidebar header
+- Show space icon + name as the trigger
+- List all spaces as menu items, plus "New Space" option at the bottom
+- Keep the existing create-space dialog
+
+### Technical notes
+- No database changes needed
+- No new hooks needed — all CRUD hooks exist (`useUpdateTodoList`, `useDeleteTodoList`)
+- `group-hover` pattern for 3-dot visibility already established in page/folder items — reuse same classes
 
