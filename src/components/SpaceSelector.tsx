@@ -1,8 +1,14 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus } from "lucide-react";
+import { ChevronDown, Plus, Check } from "lucide-react";
 import { useState } from "react";
 import { useCreateSpace } from "@/hooks/use-spaces";
 import type { Space } from "@/hooks/use-spaces";
@@ -21,6 +27,8 @@ export function SpaceSelector({ spaces, selectedId, onSelect }: SpaceSelectorPro
   const [newIcon, setNewIcon] = useState("📘");
   const createSpace = useCreateSpace();
 
+  const activeSpace = spaces.find((s) => s.id === selectedId);
+
   const handleCreate = async () => {
     if (!newName.trim()) return;
     const result = await createSpace.mutateAsync({ name: newName.trim(), icon: newIcon });
@@ -31,27 +39,38 @@ export function SpaceSelector({ spaces, selectedId, onSelect }: SpaceSelectorPro
   };
 
   return (
-    <div className="flex items-center gap-1 px-2">
-      <Select value={selectedId ?? ""} onValueChange={onSelect}>
-        <SelectTrigger className="h-8 text-sm border-none shadow-none bg-sidebar-accent/50 flex-1">
-          <SelectValue placeholder="Select space" />
-        </SelectTrigger>
-        <SelectContent>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors text-left cursor-pointer">
+            <span className="text-lg shrink-0">{activeSpace?.icon ?? "📘"}</span>
+            <span className="font-semibold text-sm text-sidebar-foreground truncate">
+              {activeSpace?.name ?? "Select space"}
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-auto" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-56">
           {spaces.map((space) => (
-            <SelectItem key={space.id} value={space.id}>
-              <span className="mr-1.5">{space.icon}</span>
-              {space.name}
-            </SelectItem>
+            <DropdownMenuItem
+              key={space.id}
+              onClick={() => onSelect(space.id)}
+              className="gap-2"
+            >
+              <span>{space.icon}</span>
+              <span className="truncate flex-1">{space.name}</span>
+              {space.id === selectedId && <Check className="h-3.5 w-3.5 text-primary shrink-0" />}
+            </DropdownMenuItem>
           ))}
-        </SelectContent>
-      </Select>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setDialogOpen(true)} className="gap-2">
+            <Plus className="h-3.5 w-3.5" />
+            New Space
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogTrigger asChild>
-          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-            <Plus className="h-4 w-4" />
-          </Button>
-        </DialogTrigger>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>New Space</DialogTitle>
@@ -80,6 +99,6 @@ export function SpaceSelector({ spaces, selectedId, onSelect }: SpaceSelectorPro
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -26,13 +26,17 @@ import { useAppStore } from "@/stores/app-store";
 import { useSession, useProfile, useLogout } from "@/hooks/use-auth";
 import { SpaceSelector } from "./SpaceSelector";
 import { FolderTree } from "./FolderTree";
-import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp, Home } from "lucide-react";
+import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp, Home, Search, SquarePen } from "lucide-react";
 import { TodoList } from "./TodoList";
+import { useEffect } from "react";
 
 const displayTitle = (title: string) => title?.trim() || "Untitled";
 
 export function AppSidebar() {
-  const { selectedSpaceId, setSelectedSpaceId, setSelectedPageId, selectedPageId, viewMode, goHome, selectedTodoListId } = useAppStore();
+  const {
+    selectedSpaceId, setSelectedSpaceId, setSelectedPageId, selectedPageId,
+    goHome, selectedTodoListId, setSearchOpen,
+  } = useAppStore();
   const { data: spaces } = useSpaces();
   const { data: pages } = usePages(selectedSpaceId ?? undefined);
   const { data: folders } = useFolders(selectedSpaceId ?? undefined);
@@ -124,43 +128,49 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r border-sidebar-border">
-      <SidebarHeader className="px-4 py-4">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📝</span>
-          <span className="font-semibold text-base text-sidebar-foreground tracking-tight">Notespace</span>
+      {/* Header: Active space as dropdown + quick create */}
+      <SidebarHeader className="px-2 py-3">
+        <div className="flex items-center gap-1">
+          <SpaceSelector
+            spaces={spaces ?? []}
+            selectedId={selectedSpaceId}
+            onSelect={setSelectedSpaceId}
+          />
+          <button
+            onClick={handleNewPage}
+            title="New page"
+            className="p-1.5 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          >
+            <SquarePen className="h-4 w-4" />
+          </button>
         </div>
       </SidebarHeader>
 
       <SidebarContent>
-        {/* Home button */}
+        {/* Search + Home quick actions */}
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton
+                  onClick={() => setSearchOpen(true)}
+                  className="text-sm text-muted-foreground"
+                >
+                  <Search className="h-4 w-4" />
+                  Search
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
                   isActive={!selectedPageId && !selectedTodoListId}
                   onClick={goHome}
-                  className="text-sm font-medium"
+                  className="text-sm"
                 >
                   <Home className="h-4 w-4" />
                   Home
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Space selector */}
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground/60">
-            Space
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SpaceSelector
-              spaces={spaces ?? []}
-              selectedId={selectedSpaceId}
-              onSelect={setSelectedSpaceId}
-            />
           </SidebarGroupContent>
         </SidebarGroup>
 
