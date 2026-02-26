@@ -143,7 +143,7 @@ export function TodoListView() {
                       if (e.key === "Enter") handleCommitRename();
                       if (e.key === "Escape") setIsRenaming(false);
                     }}
-                    className="text-3xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 border-b border-primary rounded-none w-full"
+                    className="text-3xl md:text-3xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 border-b border-primary rounded-none w-full"
                   />
                 ) : (
                   <h1 className="text-3xl font-bold text-foreground">{currentList?.name ?? "Todo List"}</h1>
@@ -232,7 +232,7 @@ export function TodoListView() {
                                 if (e.key === "Escape") setEditingTodoId(null);
                               }}
                               onClick={(e) => e.stopPropagation()}
-                              className="flex-1 text-sm font-semibold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 border-b border-primary rounded-none min-w-0"
+                              className="flex-1 text-sm md:text-sm font-semibold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 border-b border-primary rounded-none min-w-0"
                             />
                           ) : (
                             <span
@@ -281,7 +281,7 @@ export function TodoListView() {
                       }}
                       onBlur={() => handleCommit(false)}
                       placeholder="Task name"
-                      className="flex-1 text-sm font-semibold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/50"
+                      className="flex-1 text-sm md:text-sm font-semibold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/50"
                     />
                   </div>
                 ) : (

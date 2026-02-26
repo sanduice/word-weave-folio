@@ -61,7 +61,7 @@ export function TodoItem({ todo, isActive, onSelect }: TodoItemProps) {
             if (e.key === "Escape") { setTitle(todo.title); setEditing(false); }
           }}
           onClick={(e) => e.stopPropagation()}
-          className="flex-1 bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 text-sm min-w-0"
+          className="flex-1 bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 text-sm md:text-sm min-w-0"
         />
       ) : (
         <span

@@ -227,7 +227,7 @@ function PageTreeItem({
         if (e.key === "Enter") commitRename();
         if (e.key === "Escape") cancelRename();
       }}
-      className="text-sm h-6 min-w-0"
+      className="text-sm md:text-sm h-6 min-w-0"
       onClick={(e) => e.stopPropagation()}
     />
   ) : (
