@@ -1,47 +1,146 @@
 
 
-# Match Notion Sidebar Design: Colors, Weight, Background
+# Share & Access Management — Implementation Plan
 
-## Current vs Notion
+## Current State
 
-Comparing our screenshot with the Notion screenshot (image-25.png):
+The app is **single-user only**. All tables use `user_id = auth.uid()` RLS policies. There is no concept of shared access — every page, todo list, folder, and space belongs exclusively to one user.
 
-| Property | Current (ours) | Notion | 
-|---|---|---|
-| Sidebar bg | Cool gray `240 5% 97%` | Warm beige `#f7f7f5` → `40 12% 97%` |
-| Text color | Cool gray `240 4% 30%` | Warm brown `#37352f` → `40 10% 20%` |
-| Accent/hover | Cool gray `240 5% 93%` | Warm tan `#eeeeec` → `40 6% 93%` |
-| Border | Cool gray `240 6% 90%` | Nearly invisible warm `40 6% 92%` |
-| Section labels | UPPERCASE, tracking-wider, very muted | Sentence case, normal tracking, slightly muted |
-| Font weight | `font-semibold` on space name | `font-medium` — lighter feel overall |
-| Muted text | Cool gray | Warm gray |
+## Architecture
 
-## Changes
+Sharing will be implemented at the **page level** (MVP). A new `page_shares` table tracks who has access to what, with what permission level. RLS policies on `pages` (and related tables) will be updated to also allow access when a valid share record exists.
 
-### 1. `src/index.css` — Sidebar CSS variables (warm palette)
-Update the sidebar-specific variables to warm tones:
-```
---sidebar-background: 40 12% 97%;      /* warm off-white */
---sidebar-foreground: 40 10% 20%;      /* warm dark brown */
---sidebar-accent: 40 6% 93%;           /* warm hover */
---sidebar-accent-foreground: 40 10% 15%;
---sidebar-border: 40 6% 92%;           /* subtle warm border */
+```text
+┌──────────────┐       ┌──────────────────┐
+│    pages     │──────▶│   page_shares    │
+│  (owner)     │       │  page_id         │
+└──────────────┘       │  shared_with_id  │ (nullable, for registered users)
+                       │  shared_email    │ (for pending invites)
+                       │  permission      │ (view/edit/full_access)
+                       │  share_token     │ (for link sharing)
+                       │  link_access     │ (none/view/edit)
+                       │  invited_by      │
+                       └──────────────────┘
 ```
 
-### 2. `src/components/AppSidebar.tsx` — Section labels
-- **Todo Lists label** and **Pages label**: Remove `uppercase tracking-wider`, use sentence case, change opacity from `text-muted-foreground/60` to `text-sidebar-foreground/50`
-- **Favorites label**: Same treatment
+## Database Changes (Migration)
 
-### 3. `src/components/TodoList.tsx` — Section label
-- Remove `uppercase tracking-wider` from the "Todo Lists" label
-- Use `text-sidebar-foreground/50` instead of `text-muted-foreground/60`
+### 1. Create `page_shares` table
 
-### 4. `src/components/SpaceSelector.tsx` — Font weight
-- Change space name from `font-semibold` to `font-medium` to match Notion's lighter weight
+```sql
+CREATE TABLE public.page_shares (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  page_id uuid NOT NULL REFERENCES public.pages(id) ON DELETE CASCADE,
+  shared_with_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
+  shared_email text,
+  permission text NOT NULL DEFAULT 'view' CHECK (permission IN ('view', 'edit', 'full_access')),
+  share_token uuid DEFAULT gen_random_uuid(),
+  link_access text NOT NULL DEFAULT 'none' CHECK (link_access IN ('none', 'view', 'edit')),
+  invited_by uuid NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (page_id, shared_with_id),
+  UNIQUE (page_id, shared_email)
+);
 
-### 5. `src/components/AppSidebar.tsx` — Menu item text
-- Sidebar menu buttons (`Search`, `Home`) already use `text-sm` — keep as-is
-- Footer user name: keep `text-xs font-medium`
+ALTER TABLE public.page_shares ENABLE ROW LEVEL SECURITY;
+```
 
-All changes are CSS variable updates and className string tweaks. No logic changes.
+### 2. RLS policies on `page_shares`
+
+- **SELECT**: Owner of the page OR the shared user can see share records
+- **INSERT**: Only the page owner can create shares
+- **UPDATE**: Only the page owner can change permissions
+- **DELETE**: Page owner can remove any share; shared user can remove their own
+
+### 3. Update `pages` RLS policies
+
+Add OR conditions to SELECT/UPDATE policies so shared users can also access pages:
+
+```sql
+-- SELECT: owner OR has a share record
+(auth.uid() = user_id) OR EXISTS (
+  SELECT 1 FROM page_shares
+  WHERE page_shares.page_id = pages.id
+  AND page_shares.shared_with_id = auth.uid()
+)
+
+-- UPDATE: owner OR has edit/full_access share
+(auth.uid() = user_id) OR EXISTS (
+  SELECT 1 FROM page_shares
+  WHERE page_shares.page_id = pages.id
+  AND page_shares.shared_with_id = auth.uid()
+  AND page_shares.permission IN ('edit', 'full_access')
+)
+```
+
+### 4. Helper function (avoids RLS recursion)
+
+```sql
+CREATE OR REPLACE FUNCTION public.has_page_access(
+  _user_id uuid, _page_id uuid, _min_permission text DEFAULT 'view'
+) RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM pages WHERE id = _page_id AND user_id = _user_id
+  ) OR EXISTS (
+    SELECT 1 FROM page_shares
+    WHERE page_id = _page_id
+    AND shared_with_id = _user_id
+    AND (
+      _min_permission = 'view'
+      OR (_min_permission = 'edit' AND permission IN ('edit', 'full_access'))
+      OR (_min_permission = 'full_access' AND permission = 'full_access')
+    )
+  )
+$$;
+```
+
+## Frontend Changes
+
+### 5. New file: `src/hooks/use-page-shares.ts`
+
+CRUD hooks for `page_shares` table:
+- `usePageShares(pageId)` — fetch all shares for a page
+- `useCreatePageShare()` — invite by email
+- `useUpdatePageShare()` — change permission
+- `useDeletePageShare()` — revoke access
+- `useUpdateLinkAccess()` — toggle link sharing
+
+### 6. New file: `src/components/ShareDialog.tsx`
+
+A Popover (not modal) anchored to a Share button in TopBar, containing:
+- **Email invite input** (comma-separated, with permission dropdown)
+- **Access list** showing each shared user with avatar, name, email, and permission dropdown
+- **General access section** with link sharing toggle (Only invited / Anyone with link)
+- **Copy link button** with toast feedback
+
+Uses shadcn components: `Popover`, `Input`, `Button`, `Select`, `Avatar`, `Separator`, `DropdownMenu`
+
+### 7. Update `src/components/TopBar.tsx`
+
+Add a "Share" button (between the star and search buttons) that opens the ShareDialog popover.
+
+### 8. New route: `/shared/:token` (future consideration)
+
+For link-based access — not required for MVP email-based sharing, but the `share_token` column is ready for it.
+
+## File Summary
+
+| File | Action |
+|------|--------|
+| Migration SQL | Create `page_shares` table, RLS, helper function, update `pages` RLS |
+| `src/hooks/use-page-shares.ts` | New — CRUD hooks |
+| `src/components/ShareDialog.tsx` | New — Share popover UI |
+| `src/components/TopBar.tsx` | Add Share button |
+| `src/App.tsx` | Add `/shared/:token` route (optional, for link access) |
+
+## Out of Scope (MVP)
+
+- Sharing todo lists (page-level only for now)
+- Expiring/password-protected links
+- Email notifications (requires email service integration)
+- Real-time collaboration (requires presence/CRDT)
+- Audit logs
 
