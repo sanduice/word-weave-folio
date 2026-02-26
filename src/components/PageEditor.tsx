@@ -402,11 +402,11 @@ export function PageEditor() {
               </div>
 
               {/* Title */}
-              <input
+              <Input
                 value={title}
                 onChange={(e) => handleTitleChange(e.target.value)}
-                className="w-full text-3xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/30 mb-4"
-                placeholder="Untitled"
+                className="w-full text-3xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/30 mb-4"
+                placeholder="New page"
               />
 
               {/* Editor */}
@@ -467,17 +467,18 @@ export function PageEditor() {
                     {backlinks.map((link) => {
                       const fromPage = link.pages as any;
                       return (
-                        <button
+                        <Button
                           key={link.from_page_id}
+                          variant="link"
                           onClick={() => {
                             if (fromPage?.space_id) useAppStore.getState().setSelectedSpaceId(fromPage.space_id);
                             setSelectedPageId(link.from_page_id);
                           }}
-                          className="flex items-center gap-2 text-sm text-primary hover:underline"
+                          className="flex items-center gap-2 text-sm h-auto p-0"
                         >
                           <FileText className="h-3.5 w-3.5" />
-                          {fromPage?.title || "Unknown page"}
-                        </button>
+                          {fromPage?.title || "New page"}
+                        </Button>
                       );
                     })}
                   </div>

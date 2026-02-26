@@ -115,27 +115,29 @@ export function HomePage() {
               {recentItems.map((r) => {
                 const page = r.pages as any;
                 const space = page?.spaces as any;
-                const title = page?.title?.trim() || "Untitled";
+                const title = page?.title?.trim() || "New page";
                 return (
-                  <button
+                  <Card
                     key={r.id}
+                    className="cursor-pointer hover:bg-accent/50 transition-colors"
                     onClick={() => handleOpenPage(page.space_id, page.id)}
-                    className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors text-left group"
                   >
-                    <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate text-foreground">{title}</p>
-                      <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
-                        {space?.icon && <span>{space.icon}</span>}
-                        {space?.name ?? ""}
-                        <span className="mx-1">·</span>
-                        <Clock className="h-3 w-3 inline" />
-                        {formatDistanceToNow(new Date(r.opened_at), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </button>
+                    <CardContent className="flex items-center gap-3 p-3">
+                      <div className="h-8 w-8 rounded-md bg-muted flex items-center justify-center shrink-0">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium truncate text-foreground">{title}</p>
+                        <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                          {space?.icon && <span>{space.icon}</span>}
+                          {space?.name ?? ""}
+                          <span className="mx-1">·</span>
+                          <Clock className="h-3 w-3 inline" />
+                          {formatDistanceToNow(new Date(r.opened_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </div>
@@ -157,26 +159,28 @@ export function HomePage() {
           ) : (
             <div className="space-y-1">
               {upcomingTodos.map((todo) => (
-                <button
+                <Card
                   key={todo.id}
+                  className="cursor-pointer hover:bg-accent/50 transition-colors"
                   onClick={() => todo.todo_list_id && handleOpenTodo(todo.todo_list_id, todo.id)}
-                  className="flex items-center gap-3 w-full p-3 rounded-lg border border-border bg-card hover:bg-accent/50 transition-colors text-left"
                 >
-                  <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <span className="text-sm font-medium truncate flex-1 text-foreground">
-                    {todo.title?.trim() || "Untitled"}
-                  </span>
-                  {todo.priority !== "none" && (
-                    <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${priorityColors[todo.priority] ?? "bg-muted text-muted-foreground"}`}>
-                      {todo.priority}
+                  <CardContent className="flex items-center gap-3 p-3">
+                    <AlertCircle className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm font-medium truncate flex-1 text-foreground">
+                      {todo.title?.trim() || "New task"}
                     </span>
-                  )}
-                  {todo.due_date && (
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {format(new Date(todo.due_date), "MMM d")}
-                    </span>
-                  )}
-                </button>
+                    {todo.priority !== "none" && (
+                      <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${priorityColors[todo.priority] ?? "bg-muted text-muted-foreground"}`}>
+                        {todo.priority}
+                      </span>
+                    )}
+                    {todo.due_date && (
+                      <span className="text-xs text-muted-foreground shrink-0">
+                        {format(new Date(todo.due_date), "MMM d")}
+                      </span>
+                    )}
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}

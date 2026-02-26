@@ -26,11 +26,12 @@ import { useAppStore } from "@/stores/app-store";
 import { useSession, useProfile, useLogout } from "@/hooks/use-auth";
 import { SpaceSelector } from "./SpaceSelector";
 import { FolderTree } from "./FolderTree";
+import { Button } from "@/components/ui/button";
 import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp, Home, Search, SquarePen } from "lucide-react";
 import { TodoList } from "./TodoList";
 import { useEffect } from "react";
 
-const displayTitle = (title: string) => title?.trim() || "Untitled";
+const displayTitle = (title: string) => title?.trim() || "New page";
 
 export function AppSidebar() {
   const {
@@ -136,13 +137,15 @@ export function AppSidebar() {
             selectedId={selectedSpaceId}
             onSelect={setSelectedSpaceId}
           />
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handleNewPage}
             title="New page"
-            className="p-1.5 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            className="shrink-0 h-7 w-7"
           >
             <SquarePen className="h-4 w-4" />
-          </button>
+          </Button>
         </div>
       </SidebarHeader>
 
@@ -184,20 +187,12 @@ export function AppSidebar() {
               Pages
             </SidebarGroupLabel>
             <div className="flex items-center gap-0.5">
-              <button
-                onClick={handleNewPage}
-                title="New page"
-                className="p-1 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Button variant="ghost" size="icon" onClick={handleNewPage} title="New page" className="h-6 w-6">
                 <FilePlus className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={handleNewFolder}
-                title="New folder"
-                className="p-1 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
-              >
+              </Button>
+              <Button variant="ghost" size="icon" onClick={handleNewFolder} title="New folder" className="h-6 w-6">
                 <FolderPlus className="h-3.5 w-3.5" />
-              </button>
+              </Button>
             </div>
           </div>
           <SidebarGroupContent>
@@ -272,7 +267,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button className="flex items-center gap-2 p-2 rounded-lg hover:bg-sidebar-accent w-full text-left transition-colors cursor-pointer">
+            <Button variant="ghost" className="flex items-center gap-2 p-2 h-auto w-full justify-start cursor-pointer">
               <Avatar className="h-7 w-7 shrink-0">
                 <AvatarImage src={profile?.avatar_url ?? undefined} />
                 <AvatarFallback className="text-xs">
@@ -288,7 +283,7 @@ export function AppSidebar() {
                 )}
               </div>
               <ChevronUp className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            </button>
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="start" className="w-52">
             <DropdownMenuItem onClick={logout} className="gap-2 text-destructive focus:text-destructive">

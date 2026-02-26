@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { useUpdateTodo } from "@/hooks/use-todos";
 import type { Todo } from "@/hooks/use-todos";
 
@@ -50,7 +51,7 @@ export function TodoItem({ todo, isActive, onSelect }: TodoItemProps) {
         className="h-3.5 w-3.5 shrink-0 rounded"
       />
       {editing ? (
-        <input
+        <Input
           ref={inputRef}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -60,7 +61,7 @@ export function TodoItem({ todo, isActive, onSelect }: TodoItemProps) {
             if (e.key === "Escape") { setTitle(todo.title); setEditing(false); }
           }}
           onClick={(e) => e.stopPropagation()}
-          className="flex-1 bg-transparent border-none outline-none text-sm min-w-0"
+          className="flex-1 bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 text-sm min-w-0"
         />
       ) : (
         <span
@@ -69,7 +70,7 @@ export function TodoItem({ todo, isActive, onSelect }: TodoItemProps) {
           }`}
           onDoubleClick={(e) => { e.stopPropagation(); setEditing(true); }}
         >
-          {todo.title?.trim() || "Untitled"}
+          {todo.title?.trim() || "New task"}
         </span>
       )}
     </div>

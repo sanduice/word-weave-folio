@@ -4,6 +4,8 @@ import { useTodoLists, useUpdateTodoList, useDeleteTodoList } from "@/hooks/use-
 import { useAppStore } from "@/stores/app-store";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, GripVertical, Pencil, Trash2 } from "lucide-react";
 import { format, isToday, isYesterday, isTomorrow } from "date-fns";
 import { TodoDetail } from "./TodoDetail";
@@ -132,7 +134,7 @@ export function TodoListView() {
               <div className="flex items-center gap-3 mb-1">
                 <span className="text-2xl">{currentList?.icon ?? "📋"}</span>
                 {isRenaming ? (
-                  <input
+                  <Input
                     ref={renameRef}
                     value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
@@ -141,42 +143,28 @@ export function TodoListView() {
                       if (e.key === "Enter") handleCommitRename();
                       if (e.key === "Escape") setIsRenaming(false);
                     }}
-                    className="text-3xl font-bold bg-transparent outline-none border-b border-primary w-full"
+                    className="text-3xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 border-b border-primary rounded-none w-full"
                   />
                 ) : (
                   <h1 className="text-3xl font-bold text-foreground">{currentList?.name ?? "Todo List"}</h1>
                 )}
-                <button onClick={handleStartRename} className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground" title="Rename list">
+                <Button variant="ghost" size="icon" onClick={handleStartRename} title="Rename list" className="h-7 w-7">
                   <Pencil className="h-4 w-4" />
-                </button>
-                <button onClick={handleDeleteList} className="p-1 rounded hover:bg-accent text-destructive hover:text-destructive" title="Delete list">
+                </Button>
+                <Button variant="ghost" size="icon" onClick={handleDeleteList} title="Delete list" className="h-7 w-7 text-destructive hover:text-destructive">
                   <Trash2 className="h-4 w-4" />
-                </button>
+                </Button>
               </div>
               <p className="text-muted-foreground text-sm mb-8">Stay organized with tasks, your way.</p>
 
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setTodoFilter("todo")}
-                    className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md transition-colors ${
-                      todoFilter === "todo"
-                        ? "bg-accent text-accent-foreground font-medium"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                    }`}
-                  >
-                    To Do
-                  </button>
-                  <button
-                    onClick={() => setTodoFilter("done")}
-                    className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md transition-colors ${
-                      todoFilter === "done"
-                        ? "bg-accent text-accent-foreground font-medium"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                    }`}
-                  >
-                    Done
-                  </button>
+                  <Tabs value={todoFilter} onValueChange={(v) => setTodoFilter(v as "todo" | "done")}>
+                    <TabsList className="h-8">
+                      <TabsTrigger value="todo" className="text-xs px-3">To Do</TabsTrigger>
+                      <TabsTrigger value="done" className="text-xs px-3">Done</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
                 </div>
                 <Button size="sm" onClick={handleStartAdd} className="gap-1.5">
                   <Plus className="h-4 w-4" />
@@ -224,7 +212,7 @@ export function TodoListView() {
                         />
                         <div className="flex-1 flex items-center gap-1 min-w-0">
                           {editingTodoId === todo.id ? (
-                            <input
+                            <Input
                               ref={editInputRef}
                               value={editingTitle}
                               onChange={(e) => setEditingTitle(e.target.value)}
@@ -244,7 +232,7 @@ export function TodoListView() {
                                 if (e.key === "Escape") setEditingTodoId(null);
                               }}
                               onClick={(e) => e.stopPropagation()}
-                              className="flex-1 text-sm font-semibold bg-transparent outline-none border-b border-primary min-w-0"
+                              className="flex-1 text-sm font-semibold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 border-b border-primary rounded-none min-w-0"
                             />
                           ) : (
                             <span
@@ -252,21 +240,23 @@ export function TodoListView() {
                                 isDone ? "line-through text-muted-foreground/60" : ""
                               } ${!todo.title?.trim() ? "italic text-muted-foreground/50" : ""}`}
                             >
-                              {todo.title?.trim() || "Untitled"}
+                              {todo.title?.trim() || "New task"}
                             </span>
                           )}
-                          <button
+                          <Button
+                            variant="ghost"
+                            size="icon"
                             onClick={(e) => {
                               e.stopPropagation();
                               setEditingTodoId(todo.id);
                               setEditingTitle(todo.title ?? "");
                               setTimeout(() => editInputRef.current?.focus(), 0);
                             }}
-                            className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
                             title="Edit title"
                           >
                             <Pencil className="h-3.5 w-3.5" />
-                          </button>
+                          </Button>
                         </div>
                         {todo.due_date && (
                           <span className="text-xs text-muted-foreground shrink-0">
@@ -281,7 +271,7 @@ export function TodoListView() {
                   <div className="flex items-center gap-3 px-4 py-2.5">
                     <div className="h-4 w-4 shrink-0" />
                     <Checkbox disabled className="h-3.5 w-3.5 shrink-0 rounded" />
-                    <input
+                    <Input
                       ref={inputRef}
                       value={newTaskTitle}
                       onChange={(e) => setNewTaskTitle(e.target.value)}
@@ -291,18 +281,19 @@ export function TodoListView() {
                       }}
                       onBlur={() => handleCommit(false)}
                       placeholder="Task name"
-                      className="flex-1 text-sm font-semibold bg-transparent outline-none placeholder:text-muted-foreground/50"
+                      className="flex-1 text-sm font-semibold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/50"
                     />
                   </div>
                 ) : (
-                  <button
+                  <Button
+                    variant="ghost"
                     onClick={handleStartAdd}
-                    className="flex items-center gap-3 px-4 py-2.5 w-full text-sm text-muted-foreground hover:bg-accent/50 transition-colors rounded-md"
+                    className="flex items-center gap-3 px-4 py-2.5 w-full justify-start text-muted-foreground h-auto"
                   >
                     <div className="h-4 w-4 shrink-0" />
                     <Plus className="h-4 w-4" />
                     <span>New task</span>
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>

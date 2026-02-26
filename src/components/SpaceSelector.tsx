@@ -42,13 +42,13 @@ export function SpaceSelector({ spaces, selectedId, onSelect }: SpaceSelectorPro
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors text-left cursor-pointer">
+          <Button variant="ghost" className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 h-auto justify-start cursor-pointer">
             <span className="text-lg shrink-0">{activeSpace?.icon ?? "📘"}</span>
             <span className="font-semibold text-sm text-sidebar-foreground truncate">
               {activeSpace?.name ?? "Select space"}
             </span>
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-auto" />
-          </button>
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-56">
           {spaces.map((space) => (
@@ -78,13 +78,14 @@ export function SpaceSelector({ spaces, selectedId, onSelect }: SpaceSelectorPro
           <div className="space-y-4">
             <div className="flex gap-2 flex-wrap">
               {EMOJI_OPTIONS.map((emoji) => (
-                <button
+                <Button
                   key={emoji}
-                  className={`text-lg p-1 rounded ${newIcon === emoji ? "bg-accent ring-2 ring-ring" : "hover:bg-accent"}`}
+                  variant="ghost"
+                  className={`text-lg p-1 h-auto ${newIcon === emoji ? "bg-accent ring-2 ring-ring" : ""}`}
                   onClick={() => setNewIcon(emoji)}
                 >
                   {emoji}
-                </button>
+                </Button>
               ))}
             </div>
             <Input

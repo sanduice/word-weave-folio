@@ -37,7 +37,7 @@ export default function LoginPage() {
         {/* Logo + Name */}
         <div className="flex flex-col items-center gap-2">
           <span className="text-5xl">📝</span>
-          <h1 className="text-2xl font-bold tracking-tight text-card-foreground">Notespace</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-card-foreground">Wordwrap</h1>
           <p className="text-sm text-muted-foreground text-center leading-relaxed">
             Your personal wiki — organised, searchable, and always in sync.
           </p>
