@@ -1,33 +1,47 @@
 
 
-# Fix: Page & Todo Title Sizes Broken by Input's `md:text-sm`
+# Match Notion Sidebar Design: Colors, Weight, Background
 
-## Root Cause
-The shadcn `Input` component has base classes `text-base md:text-sm`. When custom title inputs pass `text-3xl font-bold`, `tailwind-merge` correctly overrides `text-base` → `text-3xl`, but **`md:text-sm` remains** because it's a different Tailwind variant. On desktop (md+), titles render at `text-sm` instead of the intended size.
+## Current vs Notion
 
-## Fix
-Add matching `md:` overrides to every title Input so they win over the base `md:text-sm`.
+Comparing our screenshot with the Notion screenshot (image-25.png):
 
-## Affected Files
+| Property | Current (ours) | Notion | 
+|---|---|---|
+| Sidebar bg | Cool gray `240 5% 97%` | Warm beige `#f7f7f5` → `40 12% 97%` |
+| Text color | Cool gray `240 4% 30%` | Warm brown `#37352f` → `40 10% 20%` |
+| Accent/hover | Cool gray `240 5% 93%` | Warm tan `#eeeeec` → `40 6% 93%` |
+| Border | Cool gray `240 6% 90%` | Nearly invisible warm `40 6% 92%` |
+| Section labels | UPPERCASE, tracking-wider, very muted | Sentence case, normal tracking, slightly muted |
+| Font weight | `font-semibold` on space name | `font-medium` — lighter feel overall |
+| Muted text | Cool gray | Warm gray |
 
-### 1. `src/components/PageEditor.tsx` (~line 408)
-- Change: `text-3xl font-bold` → `text-3xl md:text-3xl font-bold`
+## Changes
 
-### 2. `src/components/TodoDetail.tsx` (~line 194)  
-- Change: `text-xl font-bold` → `text-xl md:text-xl font-bold`
+### 1. `src/index.css` — Sidebar CSS variables (warm palette)
+Update the sidebar-specific variables to warm tones:
+```
+--sidebar-background: 40 12% 97%;      /* warm off-white */
+--sidebar-foreground: 40 10% 20%;      /* warm dark brown */
+--sidebar-accent: 40 6% 93%;           /* warm hover */
+--sidebar-accent-foreground: 40 10% 15%;
+--sidebar-border: 40 6% 92%;           /* subtle warm border */
+```
 
-### 3. `src/components/TodoListView.tsx` (~line 146)
-- Rename input: `text-3xl font-bold` → `text-3xl md:text-3xl font-bold`
-- List title h1 is fine (not an Input, so unaffected)
+### 2. `src/components/AppSidebar.tsx` — Section labels
+- **Todo Lists label** and **Pages label**: Remove `uppercase tracking-wider`, use sentence case, change opacity from `text-muted-foreground/60` to `text-sidebar-foreground/50`
+- **Favorites label**: Same treatment
 
-### 4. `src/components/TodoListView.tsx` (~line 235, ~284)
-- Todo item edit inputs: `text-sm font-semibold` → `text-sm md:text-sm font-semibold` (these happen to match but should be explicit for safety)
+### 3. `src/components/TodoList.tsx` — Section label
+- Remove `uppercase tracking-wider` from the "Todo Lists" label
+- Use `text-sidebar-foreground/50` instead of `text-muted-foreground/60`
 
-### 5. `src/components/TodoItem.tsx` (~line 60)
-- Rename input: same pattern — add `md:text-sm` explicitly
+### 4. `src/components/SpaceSelector.tsx` — Font weight
+- Change space name from `font-semibold` to `font-medium` to match Notion's lighter weight
 
-### 6. `src/components/FolderItem.tsx`, `src/components/PageTree.tsx`, `src/components/TodoList.tsx`
-- Any inline rename `Input` using custom text sizes — add matching `md:` variant
+### 5. `src/components/AppSidebar.tsx` — Menu item text
+- Sidebar menu buttons (`Search`, `Home`) already use `text-sm` — keep as-is
+- Footer user name: keep `text-xs font-medium`
 
-All changes are single-line className string updates. No logic changes.
+All changes are CSS variable updates and className string tweaks. No logic changes.
 
