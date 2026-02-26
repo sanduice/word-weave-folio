@@ -178,23 +178,20 @@ export function TodoDetail() {
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-6 pb-2">
         <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Task Details</span>
-        <button
-          onClick={() => setSelectedTodoId(null)}
-          className="p-1 rounded-sm hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
-        >
+        <Button variant="ghost" size="icon" onClick={() => setSelectedTodoId(null)} className="h-7 w-7">
           <X className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
 
       <div className="px-6 py-4 flex-1">
         {/* Title */}
-        <input
+        <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={commitTitle}
           onKeyDown={(e) => e.key === "Enter" && commitTitle()}
-          placeholder="Untitled"
-          className="w-full text-xl font-bold bg-transparent border-none outline-none placeholder:text-muted-foreground/40 mb-6"
+          placeholder="New task"
+          className="w-full text-xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/40 mb-6"
         />
 
         {/* Properties */}
@@ -285,12 +282,9 @@ export function TodoDetail() {
               </PopoverContent>
             </Popover>
             {todo.due_date && (
-              <button
-                onClick={() => updateTodo.mutate({ id: todo.id, due_date: null })}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Clear
-              </button>
+          <Button variant="ghost" size="sm" onClick={() => updateTodo.mutate({ id: todo.id, due_date: null })} className="h-6 text-xs">
+            Clear
+          </Button>
             )}
           </div>
         </div>

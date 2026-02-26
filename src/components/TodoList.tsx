@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { useTodoLists, useCreateTodoList, useUpdateTodoList, useDeleteTodoList } from "@/hooks/use-todo-lists";
 import { useAppStore } from "@/stores/app-store";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Plus, ListTodo, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import {
   SidebarGroup,
@@ -86,13 +88,9 @@ export function TodoList() {
             <ListTodo className="h-3 w-3 mr-1" />
             Todo Lists
           </SidebarGroupLabel>
-          <button
-            onClick={handleAdd}
-            title="New todo list"
-            className="p-1 rounded hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <Button variant="ghost" size="icon" onClick={handleAdd} title="New todo list" className="h-6 w-6">
             <Plus className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
 
         <SidebarGroupContent>
@@ -106,7 +104,7 @@ export function TodoList() {
                 <SidebarMenuItem key={list.id}>
                   {renamingId === list.id ? (
                     <div className="px-2 py-0.5">
-                      <input
+                      <Input
                         ref={renameInputRef}
                         value={renameValue}
                         onChange={(e) => setRenameValue(e.target.value)}
@@ -115,7 +113,7 @@ export function TodoList() {
                           if (e.key === "Enter") commitRename();
                           if (e.key === "Escape") cancelRename();
                         }}
-                        className="w-full text-sm px-2 py-1 rounded border border-input bg-background focus:outline-none focus:ring-1 focus:ring-ring"
+                        className="w-full text-sm h-7"
                       />
                     </div>
                   ) : (
@@ -130,12 +128,14 @@ export function TodoList() {
                       </SidebarMenuButton>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button
-                            className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-all shrink-0 mr-1"
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-all shrink-0 mr-1"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <MoreHorizontal className="h-3.5 w-3.5" />
-                          </button>
+                          </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-40">
                           <DropdownMenuItem onClick={() => startRename(list.id, list.name)} className="gap-2">

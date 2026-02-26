@@ -1,4 +1,6 @@
 import { SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ChevronRight, FileText, GripVertical, MoreHorizontal, Pencil, Copy, Trash2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import type { Page } from "@/hooks/use-pages";
@@ -22,7 +24,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-const displayTitle = (title: string) => title?.trim() || "Untitled";
+const displayTitle = (title: string) => title?.trim() || "New page";
 
 interface PageTreeProps {
   pages: Page[];
@@ -216,7 +218,7 @@ function PageTreeItem({
   const titleIsEmpty = !page.title?.trim();
 
   const titleContent = isRenaming ? (
-    <input
+    <Input
       ref={renameInputRef}
       value={renameValue}
       onChange={(e) => setRenameValue(e.target.value)}
@@ -225,7 +227,7 @@ function PageTreeItem({
         if (e.key === "Enter") commitRename();
         if (e.key === "Escape") cancelRename();
       }}
-      className="text-sm bg-transparent border border-border rounded px-1 py-0 w-full outline-none focus:ring-1 focus:ring-ring min-w-0"
+      className="text-sm h-6 min-w-0"
       onClick={(e) => e.stopPropagation()}
     />
   ) : (
@@ -237,12 +239,14 @@ function PageTreeItem({
   const actionMenu = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button
-          className="p-0.5 rounded opacity-0 group-hover/page-item:opacity-100 hover:bg-sidebar-accent shrink-0 transition-opacity"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6 opacity-0 group-hover/page-item:opacity-100 shrink-0 transition-opacity"
           onClick={(e) => e.stopPropagation()}
         >
           <MoreHorizontal className="h-3.5 w-3.5" />
-        </button>
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="right" align="start" className="w-36">
         <DropdownMenuItem onClick={() => startRename()}>
@@ -306,11 +310,11 @@ function PageTreeItem({
                 <GripVertical className="h-3 w-3" />
               </span>
               <CollapsibleTrigger asChild>
-                <button className="p-1 hover:bg-sidebar-accent rounded shrink-0">
+                <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
                   <ChevronRight
                     className={`h-3 w-3 transition-transform ${open ? "rotate-90" : ""}`}
                   />
-                </button>
+                </Button>
               </CollapsibleTrigger>
               <SidebarMenuButton
                 isActive={selectedPageId === page.id}

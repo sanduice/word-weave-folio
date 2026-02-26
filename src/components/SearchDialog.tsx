@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useSearchPages } from "@/hooks/use-pages";
 import { useAppStore } from "@/stores/app-store";
 import { FileText, Folder, Search } from "lucide-react";
@@ -56,14 +57,15 @@ export function SearchDialog() {
                 const spaceIcon = result.spaces?.icon;
                 const folderName = result.folders?.name;
                 return (
-                  <button
+                  <Button
                     key={result.id}
+                    variant="ghost"
                     onClick={() => handleSelect(result)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-left hover:bg-accent transition-colors"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 h-auto justify-start"
                   >
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">{result.title || "Untitled"}</p>
+                      <p className="text-sm font-medium truncate">{result.title || "New page"}</p>
                       <p className="text-xs text-muted-foreground truncate flex items-center gap-1">
                         {spaceIcon && <span>{spaceIcon}</span>}
                         {spaceName && <span>{spaceName}</span>}
@@ -76,7 +78,7 @@ export function SearchDialog() {
                         )}
                       </p>
                     </div>
-                  </button>
+                  </Button>
                 );
               })}
             </div>

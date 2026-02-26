@@ -22,6 +22,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ChevronRight, Folder, FolderOpen, GripVertical, MoreHorizontal, FilePlus, FolderPlus, Pencil, Trash2 } from "lucide-react";
 import type { Folder as FolderType } from "@/hooks/use-folders";
 import { useUpdateFolder, useDeleteFolder, useCreateFolder, isFolderAncestor } from "@/hooks/use-folders";
@@ -243,22 +245,22 @@ export function FolderItem({
 
             {/* Expand chevron */}
             <CollapsibleTrigger asChild>
-              <button className="p-1 hover:bg-sidebar-accent rounded shrink-0">
+              <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0">
                 <ChevronRight
                   className={`h-3 w-3 transition-transform text-muted-foreground ${open && hasChildren ? "rotate-90" : ""}`}
                 />
-              </button>
+              </Button>
             </CollapsibleTrigger>
 
             {/* Folder name / rename input */}
             {isRenaming ? (
-              <input
+              <Input
                 ref={renameInputRef}
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onBlur={handleRenameSubmit}
                 onKeyDown={handleRenameKeyDown}
-                className="flex-1 text-sm bg-transparent border-b border-primary outline-none py-0.5 px-1 text-foreground"
+                className="flex-1 text-sm h-7"
                 onClick={(e) => e.stopPropagation()}
               />
             ) : (
@@ -277,13 +279,15 @@ export function FolderItem({
             {/* Actions menu */}
             {!isRenaming && (
               <DropdownMenu open={actionsOpen} onOpenChange={setActionsOpen}>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    className="p-1 rounded opacity-0 group-hover:opacity-60 hover:opacity-100 hover:bg-sidebar-accent shrink-0 transition-opacity"
+              <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 opacity-0 group-hover:opacity-60 hover:opacity-100 shrink-0 transition-opacity"
                     onClick={(e) => e.stopPropagation()}
                   >
                     <MoreHorizontal className="h-3.5 w-3.5" />
-                  </button>
+                  </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="right" align="start" className="w-44">
                   <DropdownMenuItem onClick={handleAddPage} className="gap-2 text-xs">
