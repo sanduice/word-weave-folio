@@ -183,7 +183,7 @@ export function AppSidebar() {
         {/* Pages + Folders tree */}
         <SidebarGroup className="flex-1">
           <div className="flex items-center justify-between px-2 pr-1">
-            <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground/60 px-0">
+            <SidebarGroupLabel className="text-xs text-sidebar-foreground/50 px-0">
               Pages
             </SidebarGroupLabel>
             <div className="flex items-center gap-0.5">
@@ -213,7 +213,7 @@ export function AppSidebar() {
         {/* Favorites */}
         {favorites && favorites.length > 0 && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground/60">
+            <SidebarGroupLabel className="text-xs text-sidebar-foreground/50">
               <Star className="h-3 w-3 mr-1" />
               Favorites
             </SidebarGroupLabel>

@@ -44,7 +44,7 @@ export function SpaceSelector({ spaces, selectedId, onSelect }: SpaceSelectorPro
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 h-auto justify-start cursor-pointer">
             <span className="text-lg shrink-0">{activeSpace?.icon ?? "📘"}</span>
-            <span className="font-semibold text-sm text-sidebar-foreground truncate">
+            <span className="font-medium text-sm text-sidebar-foreground truncate">
               {activeSpace?.name ?? "Select space"}
             </span>
             <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 ml-auto" />
