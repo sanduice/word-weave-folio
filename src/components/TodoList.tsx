@@ -84,7 +84,7 @@ export function TodoList() {
     <>
       <SidebarGroup>
         <div className="flex items-center justify-between px-2 pr-1">
-          <SidebarGroupLabel className="text-xs uppercase tracking-wider text-muted-foreground/60 px-0">
+          <SidebarGroupLabel className="text-xs text-sidebar-foreground/50 px-0">
             <ListTodo className="h-3 w-3 mr-1" />
             Todo Lists
           </SidebarGroupLabel>
