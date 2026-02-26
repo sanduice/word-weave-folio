@@ -13,6 +13,8 @@ interface AppState {
   setActiveCommentId: (id: string | null) => void;
   selectedTodoId: string | null;
   setSelectedTodoId: (id: string | null) => void;
+  selectedTodoListId: string | null;
+  setSelectedTodoListId: (id: string | null) => void;
   todoFilter: "todo" | "done";
   setTodoFilter: (filter: "todo" | "done") => void;
   viewMode: "pages" | "todos";
@@ -22,7 +24,7 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   selectedSpaceId: null,
   selectedPageId: null,
-  setSelectedSpaceId: (id) => set({ selectedSpaceId: id, selectedPageId: null, selectedTodoId: null }),
+  setSelectedSpaceId: (id) => set({ selectedSpaceId: id, selectedPageId: null, selectedTodoId: null, selectedTodoListId: null }),
   setSelectedPageId: (id) => set({ selectedPageId: id, selectedTodoId: null, viewMode: "pages" as const }),
   searchOpen: false,
   setSearchOpen: (open) => set({ searchOpen: open }),
@@ -32,6 +34,8 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveCommentId: (id) => set({ activeCommentId: id }),
   selectedTodoId: null,
   setSelectedTodoId: (id) => set({ selectedTodoId: id }),
+  selectedTodoListId: null,
+  setSelectedTodoListId: (id) => set({ selectedTodoListId: id, selectedTodoId: null, viewMode: "todos" as const, selectedPageId: null }),
   todoFilter: "todo" as const,
   setTodoFilter: (filter) => set({ todoFilter: filter }),
   viewMode: "pages" as const,

@@ -26,12 +26,13 @@ import { useAppStore } from "@/stores/app-store";
 import { useSession, useProfile, useLogout } from "@/hooks/use-auth";
 import { SpaceSelector } from "./SpaceSelector";
 import { FolderTree } from "./FolderTree";
-import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp, ListTodo } from "lucide-react";
+import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp } from "lucide-react";
+import { TodoList } from "./TodoList";
 
 const displayTitle = (title: string) => title?.trim() || "Untitled";
 
 export function AppSidebar() {
-  const { selectedSpaceId, setSelectedSpaceId, setSelectedPageId, selectedPageId, viewMode, setViewMode } = useAppStore();
+  const { selectedSpaceId, setSelectedSpaceId, setSelectedPageId, selectedPageId, viewMode } = useAppStore();
   const { data: spaces } = useSpaces();
   const { data: pages } = usePages(selectedSpaceId ?? undefined);
   const { data: folders } = useFolders(selectedSpaceId ?? undefined);
@@ -145,23 +146,8 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Todos nav link */}
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  isActive={viewMode === "todos"}
-                  onClick={() => setViewMode("todos")}
-                  className="text-sm"
-                >
-                  <ListTodo className="h-3.5 w-3.5 shrink-0" />
-                  <span>Todos</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Todo lists */}
+        <TodoList />
 
         {/* Pages + Folders tree */}
         <SidebarGroup className="flex-1">
