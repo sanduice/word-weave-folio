@@ -12,6 +12,7 @@ export interface Todo {
   due_date: string | null;
   sort_order: number | null;
   completed_at: string | null;
+  todo_list_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,5 +85,27 @@ export function useDeleteTodo() {
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["todos"] }),
+  });
+}
+
+export function useUpcomingTodos() {
+  const now = new Date();
+  const weekLater = new Date(now);
+  weekLater.setDate(weekLater.getDate() + 7);
+
+  return useQuery({
+    queryKey: ["upcoming-todos"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("todos")
+        .select("*")
+        .neq("status", "done")
+        .not("due_date", "is", null)
+        .lte("due_date", weekLater.toISOString())
+        .order("due_date", { ascending: true })
+        .limit(10);
+      if (error) throw error;
+      return data as Todo[];
+    },
   });
 }
