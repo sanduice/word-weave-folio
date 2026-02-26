@@ -1,67 +1,25 @@
 
 
-# Multiple Todo Lists Per Space
+# Inline Task Title Editing & Continuous Task Creation
 
-## Overview
-Add the ability to create multiple named todo lists within each space (e.g. "Work", "Personal", "Sprint 1"). Each list contains its own set of tasks. Users can switch between lists in the sidebar and main view.
+## Changes — all in `src/components/TodoListView.tsx`
 
-## Database Changes
+### 1. Inline editable task titles with hover pen icon
+- Track `editingTodoId` and `editingTitle` state
+- Replace the static `<span>` for each todo title with: if `editingTodoId === todo.id`, show an `<input>` pre-filled with the title; otherwise show the current `<span>`
+- Add a `<Pencil>` icon button next to the title, visible only on hover (`opacity-0 group-hover:opacity-100`), that sets `editingTodoId` to that todo's id
+- On Enter or blur, call `updateTodo.mutate({ id, title })` and clear `editingTodoId`
+- On Escape, discard changes and clear `editingTodoId`
+- Click on the pencil and the input both call `e.stopPropagation()` to avoid triggering row selection
 
-### New table: `todo_lists`
-| Column | Type | Default | Notes |
-|--------|------|---------|-------|
-| id | uuid | gen_random_uuid() | PK |
-| space_id | uuid | — | FK to spaces |
-| user_id | uuid | — | For RLS |
-| name | text | 'Untitled List' | |
-| icon | text | '📋' | Emoji icon |
-| sort_order | integer | 0 | |
-| created_at | timestamptz | now() | |
-| updated_at | timestamptz | now() | |
+### 2. Continuous task creation on Enter
+- Change `handleCommit`: after creating a task, keep `isAddingTask = true` and re-focus the input instead of closing it
+- Flow: user presses Enter → task is created → input clears → cursor stays in input ready for next task
+- Only close the input on Escape or clicking away (blur)
 
-RLS: Same pattern as other tables — users can only CRUD their own rows.
+### Files modified
 
-### Modify `todos` table
-- Add column `todo_list_id` (uuid, nullable initially for migration, then required)
-- Migrate existing todos: create a default "Todo List" per space that has todos, assign existing todos to it
-
-## Code Changes
-
-### 1. New hook: `src/hooks/use-todo-lists.ts`
-- `useTodoLists(spaceId)` — fetch all lists for a space
-- `useCreateTodoList()` — create a new list
-- `useUpdateTodoList()` — rename, reorder
-- `useDeleteTodoList()` — delete list (and its todos)
-
-### 2. Update `src/hooks/use-todos.ts`
-- Change `useTodos` to accept `todoListId` instead of `spaceId`
-- Filter todos by `todo_list_id`
-
-### 3. Update `src/stores/app-store.ts`
-- Add `selectedTodoListId` state and setter
-- When selecting a space, reset `selectedTodoListId`
-
-### 4. Update sidebar (`src/components/AppSidebar.tsx`)
-- Replace single "Todos" section with a list of todo lists under each space
-- Each list item is clickable to open that list's view
-- Add "+" button to create a new todo list
-- Allow renaming lists (double-click or context menu)
-
-### 5. Update `src/components/TodoListView.tsx`
-- Show the selected todo list's name as the heading
-- Filter todos by `selectedTodoListId` instead of space
-- Add a dropdown or breadcrumb showing which list is active
-
-### 6. Update `src/components/TodoList.tsx` (sidebar component)
-- Show all todo lists for the current space
-- Each list is a clickable item that sets `selectedTodoListId`
-
-### 7. Update `src/components/TodoDetail.tsx`
-- No major changes needed — still works on individual todo items
-
-## Migration Strategy
-1. Create `todo_lists` table with RLS
-2. Add `todo_list_id` column to `todos` (nullable)
-3. SQL migration function: for each space with existing todos, create a default list and assign todos to it
-4. After migration, consider adding a NOT NULL constraint
+| File | Change |
+|------|--------|
+| `src/components/TodoListView.tsx` | Add `editingTodoId`/`editingTitle` state, inline edit input per row, hover Pencil button, and keep input open after Enter |
 
