@@ -220,8 +220,6 @@ export function StickyToolbar({ editor, onLinkClick }: StickyToolbarProps) {
   return (
     <div
       className="sticky-toolbar"
-      // Prevent toolbar clicks from stealing editor focus/selection
-      onMouseDown={(e) => e.preventDefault()}
     >
       {/* Group A: History */}
       <ToolBtn
