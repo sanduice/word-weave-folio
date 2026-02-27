@@ -289,7 +289,7 @@ export function FolderItem({
                     <MoreHorizontal className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent side="right" align="start" className="w-44">
+                <DropdownMenuContent side="right" align="start" sideOffset={4} className="w-44">
                   <DropdownMenuItem onClick={handleAddPage} className="gap-2 text-xs">
                     <FilePlus className="h-3.5 w-3.5" /> Add page
                   </DropdownMenuItem>
