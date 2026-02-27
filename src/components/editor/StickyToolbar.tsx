@@ -137,7 +137,6 @@ function TextStyleDropdown({ editor }: { editor: Editor }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          onMouseDown={(e) => e.preventDefault()}
           className="sticky-dropdown-trigger"
           aria-label="Text style"
         >
@@ -145,7 +144,16 @@ function TextStyleDropdown({ editor }: { editor: Editor }) {
           <ChevronsUpDown className="h-2.5 w-2.5 opacity-50 ml-0.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={6}>
+      <DropdownMenuContent
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        portalled={false}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          editor.chain().focus().run();
+        }}
+      >
         <DropdownMenuItem
           onSelect={() => editor.chain().focus().setParagraph().run()}
           className="gap-2"

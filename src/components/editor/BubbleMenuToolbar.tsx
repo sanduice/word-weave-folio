@@ -132,7 +132,6 @@ function TextStyleDropdown({ editor }: { editor: Editor }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          onMouseDown={(e) => e.preventDefault()}
           className="bubble-dropdown-trigger"
           aria-label="Text style"
         >
@@ -140,7 +139,16 @@ function TextStyleDropdown({ editor }: { editor: Editor }) {
           <ChevronsUpDown className="h-2.5 w-2.5 opacity-50 ml-0.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={6}>
+      <DropdownMenuContent
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        portalled={false}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          editor.chain().focus().run();
+        }}
+      >
         <DropdownMenuItem
           onSelect={() => editor.chain().focus().setParagraph().run()}
           className="gap-2"
@@ -188,7 +196,6 @@ function ListDropdown({ editor }: { editor: Editor }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          onMouseDown={(e) => e.preventDefault()}
           className="bubble-dropdown-trigger"
           aria-label="List type"
         >
@@ -196,7 +203,16 @@ function ListDropdown({ editor }: { editor: Editor }) {
           <ChevronsUpDown className="h-2.5 w-2.5 opacity-50 ml-0.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" sideOffset={6}>
+      <DropdownMenuContent
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        portalled={false}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          editor.chain().focus().run();
+        }}
+      >
         <DropdownMenuItem
           onSelect={() => editor.chain().focus().toggleBulletList().run()}
           className="gap-2"
@@ -236,7 +252,6 @@ function MoreMenu({ editor }: { editor: Editor }) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          onMouseDown={(e) => e.preventDefault()}
           className="bubble-toolbar-btn"
           aria-label="More options"
           title="More options"
@@ -244,7 +259,16 @@ function MoreMenu({ editor }: { editor: Editor }) {
           <MoreHorizontal className="h-3.5 w-3.5" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" sideOffset={6}>
+      <DropdownMenuContent
+        side="bottom"
+        align="end"
+        sideOffset={6}
+        portalled={false}
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          editor.chain().focus().run();
+        }}
+      >
         <DropdownMenuItem
           onSelect={() =>
             editor.chain().focus().clearNodes().unsetAllMarks().run()
