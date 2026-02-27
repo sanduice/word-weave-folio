@@ -24,10 +24,11 @@ import { useFolders, useCreateFolder } from "@/hooks/use-folders";
 import { useCreatePage } from "@/hooks/use-pages";
 import { useAppStore } from "@/stores/app-store";
 import { useSession, useProfile, useLogout } from "@/hooks/use-auth";
+import { useSharedPages } from "@/hooks/use-shared-pages";
 import { SpaceSelector } from "./SpaceSelector";
 import { FolderTree } from "./FolderTree";
 import { Button } from "@/components/ui/button";
-import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp, Home, Search, SquarePen } from "lucide-react";
+import { Star, FileText, FilePlus, FolderPlus, GripVertical, LogOut, ChevronUp, Home, Search, SquarePen, Users } from "lucide-react";
 import { TodoList } from "./TodoList";
 import { useEffect } from "react";
 
@@ -48,6 +49,7 @@ export function AppSidebar() {
   const logout = useLogout();
   const createPage = useCreatePage();
   const createFolder = useCreateFolder();
+  const { data: sharedPages } = useSharedPages();
 
   // Auto-select first space once data loads
   useEffect(() => {
@@ -255,6 +257,46 @@ export function AppSidebar() {
                           </span>
                         </SidebarMenuButton>
                       </div>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Shared with me */}
+        {sharedPages && sharedPages.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs text-sidebar-foreground/50">
+              <Users className="h-3 w-3 mr-1" />
+              Shared with me
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {sharedPages.map((shared) => {
+                  const pg = shared.page;
+                  if (!pg) return null;
+                  const titleIsEmpty = !pg.title?.trim();
+                  return (
+                    <SidebarMenuItem key={shared.id}>
+                      <SidebarMenuButton
+                        isActive={selectedPageId === pg.id}
+                        onClick={() => {
+                          setSelectedSpaceId(pg.space_id);
+                          setSelectedPageId(pg.id);
+                        }}
+                        className="text-sm"
+                      >
+                        {pg.icon_value ? (
+                          <span className="text-sm shrink-0">{pg.icon_value}</span>
+                        ) : (
+                          <FileText className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                        <span className={`truncate ${titleIsEmpty ? "italic text-muted-foreground/50" : ""}`}>
+                          {pg.title?.trim() || "New page"}
+                        </span>
+                      </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
                 })}
