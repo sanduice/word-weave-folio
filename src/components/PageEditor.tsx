@@ -405,7 +405,7 @@ export function PageEditor() {
               <Input
                 value={title}
                 onChange={(e) => handleTitleChange(e.target.value)}
-                className="w-full text-3xl md:text-3xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/30 mb-4"
+                className="w-full text-4xl md:text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/30 mb-4"
                 placeholder="New page"
               />
 

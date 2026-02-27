@@ -132,7 +132,7 @@ export function TodoListView() {
             <div className="max-w-3xl mx-auto px-8 py-12">
               {/* List header */}
               <div className="flex items-center gap-3 mb-1">
-                <span className="text-2xl">{currentList?.icon ?? "📋"}</span>
+                <span className="text-3xl">{currentList?.icon ?? "📋"}</span>
                 {isRenaming ? (
                   <Input
                     ref={renameRef}
@@ -143,10 +143,10 @@ export function TodoListView() {
                       if (e.key === "Enter") handleCommitRename();
                       if (e.key === "Escape") setIsRenaming(false);
                     }}
-                    className="text-3xl md:text-3xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 border-b border-primary rounded-none w-full"
+                    className="text-4xl md:text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 border-b border-primary rounded-none w-full"
                   />
                 ) : (
-                  <h1 className="text-3xl font-bold text-foreground">{currentList?.name ?? "Todo List"}</h1>
+                  <h1 className="text-4xl font-bold text-foreground">{currentList?.name ?? "Todo List"}</h1>
                 )}
                 <Button variant="ghost" size="icon" onClick={handleStartRename} title="Rename list" className="h-7 w-7">
                   <Pencil className="h-4 w-4" />
