@@ -1,18 +1,29 @@
 
+## Implementation steps
+1. Harden dropdown rendering for toolbar use-cases.
+2. Remove trigger event handling that can interfere with anchor calculations.
+3. Keep editor focus behavior via close handlers instead of trigger `onMouseDown` prevention.
+4. Re-test sticky toolbar and inline bubble toolbar dropdown positioning in the same session.
 
-## Problem
+## File-level changes
+- `src/components/ui/dropdown-menu.tsx`
+  - Extend `DropdownMenuContent` with a `portalled?: boolean` prop (default `true`).
+  - Render `DropdownMenuPrimitive.Content` directly when `portalled={false}`, otherwise keep current portal behavior.
+- `src/components/editor/StickyToolbar.tsx`
+  - In `TextStyleDropdown`, remove `onMouseDown={(e) => e.preventDefault()}` from the trigger button.
+  - Use `DropdownMenuContent` with explicit placement (`side="bottom"`, `align="start"`, `sideOffset={6}`) and `portalled={false}`.
+  - Add `onCloseAutoFocus={(e) => { e.preventDefault(); editor.chain().focus().run(); }}` on the dropdown content.
+- `src/components/editor/BubbleMenuToolbar.tsx`
+  - Apply the same trigger/focus pattern for dropdown triggers (`TextStyleDropdown`, `ListDropdown`, `MoreMenu`) to prevent the same offset issue from appearing there.
+  - Keep placement explicit (`side`, `align`, `sideOffset`) for consistency.
 
-The `TextStyleDropdown` menu (Text / H1 / H2 / H3) opens at the top-left corner of the viewport instead of anchored to its trigger button.
+## Technical details
+- No backend/database/auth changes required.
+- This is a UI positioning fix focused on Radix dropdown trigger anchoring stability.
+- The change avoids global portal/position side-effects by allowing local non-portalled rendering specifically where anchor drift is reported.
 
-**Root cause**: The parent `.sticky-toolbar` div has `onMouseDown={(e) => e.preventDefault()}` which intercepts all mousedown events inside the toolbar, including the Radix `DropdownMenuTrigger` click. This interferes with Radix's internal positioning logic, causing it to calculate the trigger position as (0, 0).
-
-## Fix
-
-### File: `src/components/editor/StickyToolbar.tsx`
-
-1. **Remove the blanket `onMouseDown` handler** from the parent toolbar `div` (line 225).
-2. The individual `ToolBtn` components already have their own `onMouseDown={(e) => { e.preventDefault(); onClick(); }}`, so editor focus is still preserved for all regular toolbar buttons. The color `Popover` triggers also handle this correctly.
-3. On the `TextStyleDropdown` trigger button, it already has `onMouseDown={(e) => e.preventDefault()}` — this is sufficient to prevent editor blur without breaking Radix positioning.
-
-This is a one-line removal (the `onMouseDown` prop on the wrapper div at line 225).
-
+## Validation checklist
+1. Open a page and click sticky toolbar **Text** dropdown repeatedly; confirm it opens adjacent to the trigger every time.
+2. Scroll editor content, then reopen **Text** dropdown; confirm no jump to top-left.
+3. Select text to show bubble toolbar; open bubble dropdowns and verify correct anchoring.
+4. Confirm color/highlight popovers still open in correct positions and formatting actions still apply to current selection/cursor.
