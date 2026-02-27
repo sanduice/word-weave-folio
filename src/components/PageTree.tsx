@@ -248,7 +248,7 @@ function PageTreeItem({
           <MoreHorizontal className="h-3.5 w-3.5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="right" align="start" className="w-36">
+      <DropdownMenuContent side="right" align="start" sideOffset={4} className="w-36">
         <DropdownMenuItem onClick={() => startRename()}>
           <Pencil className="h-3.5 w-3.5 mr-2" />
           Rename
