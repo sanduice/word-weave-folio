@@ -122,17 +122,19 @@ export function TodoListView() {
                     {currentList?.icon ?? "📋"}
                   </button>
                 </EmojiPicker>
-                <Input
+                <textarea
                   value={listName || currentList?.name || ""}
                   onChange={(e) => setListName(e.target.value)}
                   onFocus={() => setListName(currentList?.name ?? "")}
                   onBlur={() => { handleNameBlur(); setListName(""); }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") { e.currentTarget.blur(); }
+                    if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); }
                     if (e.key === "Escape") { setListName(""); e.currentTarget.blur(); }
                   }}
+                  onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
                   placeholder="Untitled List"
-                  className="text-4xl md:text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/40 w-full"
+                  rows={1}
+                  className="text-4xl md:text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 outline-none h-auto p-0 placeholder:text-muted-foreground/40 w-full resize-none overflow-hidden"
                 />
               </div>
 

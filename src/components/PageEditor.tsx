@@ -402,10 +402,13 @@ export function PageEditor() {
               </div>
 
               {/* Title */}
-              <Input
+              <textarea
                 value={title}
                 onChange={(e) => handleTitleChange(e.target.value)}
-                className="w-full text-4xl md:text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/30 mb-4"
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); editor?.commands.focus(); } }}
+                onInput={(e) => { const t = e.currentTarget; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; }}
+                rows={1}
+                className="w-full text-4xl md:text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 outline-none h-auto p-0 placeholder:text-muted-foreground/30 mb-4 resize-none overflow-hidden"
                 placeholder="New page"
               />
 
