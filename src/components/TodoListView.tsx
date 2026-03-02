@@ -1,15 +1,16 @@
 import { useState, useRef, useCallback } from "react";
 import { useTodos, useCreateTodo, useUpdateTodo } from "@/hooks/use-todos";
-import { useTodoLists, useUpdateTodoList, useDeleteTodoList } from "@/hooks/use-todo-lists";
+import { useTodoLists, useUpdateTodoList } from "@/hooks/use-todo-lists";
 import { useAppStore } from "@/stores/app-store";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, GripVertical, Pencil, Trash2 } from "lucide-react";
+import { Plus, GripVertical, Pencil } from "lucide-react";
 import { format, isToday, isYesterday, isTomorrow } from "date-fns";
 import { TodoDetail } from "./TodoDetail";
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "@/components/ui/resizable";
+import { EmojiPicker } from "./editor/EmojiPicker";
 import type { Todo } from "@/hooks/use-todos";
 
 function formatDueDate(dateStr: string) {
@@ -28,15 +29,12 @@ export function TodoListView() {
   const createTodo = useCreateTodo();
   const updateTodo = useUpdateTodo();
   const updateList = useUpdateTodoList();
-  const deleteList = useDeleteTodoList();
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState("");
-  const renameRef = useRef<HTMLInputElement>(null);
+  const [listName, setListName] = useState("");
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -76,29 +74,16 @@ export function TodoListView() {
     });
   }
 
-  function handleStartRename() {
+  function handleEmojiSelect(emoji: string) {
     if (!currentList) return;
-    setRenameValue(currentList.name);
-    setIsRenaming(true);
-    setTimeout(() => renameRef.current?.focus(), 0);
+    updateList.mutate({ id: currentList.id, icon: emoji });
   }
 
-  function handleCommitRename() {
-    setIsRenaming(false);
-    const name = renameValue.trim();
+  function handleNameBlur() {
+    const name = listName.trim();
     if (!name || !currentList || name === currentList.name) return;
     updateList.mutate({ id: currentList.id, name });
   }
-
-  function handleDeleteList() {
-    if (!currentList) return;
-    deleteList.mutate(currentList.id, {
-      onSuccess: () => {
-        useAppStore.getState().setSelectedTodoListId(null);
-      },
-    });
-  }
-
   const handleDrop = useCallback(
     (dropIdx: number) => {
       if (dragIdx === null || dragIdx === dropIdx || !todos) return;
@@ -131,31 +116,25 @@ export function TodoListView() {
           <div className="h-full overflow-y-auto">
             <div className="max-w-3xl mx-auto px-8 py-12">
               {/* List header */}
-              <div className="flex items-center gap-3 mb-1">
-                <span className="text-3xl">{currentList?.icon ?? "📋"}</span>
-                {isRenaming ? (
-                  <Input
-                    ref={renameRef}
-                    value={renameValue}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onBlur={handleCommitRename}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleCommitRename();
-                      if (e.key === "Escape") setIsRenaming(false);
-                    }}
-                    className="text-4xl md:text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 border-b border-primary rounded-none w-full"
-                  />
-                ) : (
-                  <h1 className="text-4xl font-bold text-foreground">{currentList?.name ?? "Todo List"}</h1>
-                )}
-                <Button variant="ghost" size="icon" onClick={handleStartRename} title="Rename list" className="h-7 w-7">
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={handleDeleteList} title="Delete list" className="h-7 w-7 text-destructive hover:text-destructive">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+              <div className="flex items-center gap-3 mb-6">
+                <EmojiPicker onSelect={handleEmojiSelect} hasIcon={!!currentList?.icon}>
+                  <button className="text-3xl hover:bg-accent rounded-md p-1 transition-colors cursor-pointer">
+                    {currentList?.icon ?? "📋"}
+                  </button>
+                </EmojiPicker>
+                <Input
+                  value={listName || currentList?.name || ""}
+                  onChange={(e) => setListName(e.target.value)}
+                  onFocus={() => setListName(currentList?.name ?? "")}
+                  onBlur={() => { handleNameBlur(); setListName(""); }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") { e.currentTarget.blur(); }
+                    if (e.key === "Escape") { setListName(""); e.currentTarget.blur(); }
+                  }}
+                  placeholder="Untitled List"
+                  className="text-4xl md:text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 h-auto p-0 placeholder:text-muted-foreground/40 w-full"
+                />
               </div>
-              <p className="text-muted-foreground text-sm mb-8">Stay organized with tasks, your way.</p>
 
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-1">
