@@ -1,26 +1,25 @@
 
 
-## Plan: Make todo list header inline-editable with changeable emoji
+## Plan: Fix todo/page title styling — remove outline, allow wrapping
 
-### Changes to `src/components/TodoListView.tsx`
+### Changes
 
-#### 1. Remove pen icon, delete icon, and subtitle
-- Remove the `<Button>` with `<Pencil>` icon (line 151-153)
-- Remove the `<Button>` with `<Trash2>` icon (line 154-156)
-- Remove the "Stay organized with tasks, your way." paragraph (line 158)
+#### 1. Replace `<Input>` with `<textarea>` for both titles
+Both titles use `<Input>` (single-line `<input>`), which forces single-line display and shows a focus outline. Replace with auto-resizing `<textarea>` elements.
 
-#### 2. Make title inline-editable (click to edit, no pen icon)
-- Replace the `<h1>` with an `<Input>` that looks like a heading by default (transparent, no border)
-- On focus it becomes editable; on blur/Enter it saves via `updateList.mutate`
-- No separate rename state needed — the input IS the title display
+#### `src/components/TodoListView.tsx` (line ~135)
+- Replace `<Input>` with a `<textarea>` that auto-resizes to content
+- Add `rows={1}`, `overflow-hidden`, `resize-none` to prevent scrollbar
+- Keep existing classes: `text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 h-auto p-0`
+- Add `outline-none` to remove any remaining focus outline
+- Auto-resize on input via a small effect or `onInput` handler that sets `style.height`
 
-#### 3. Make the emoji clickable to change
-- Wrap the list icon emoji in the `EmojiPicker` component (already exists at `src/components/editor/EmojiPicker.tsx`)
-- On emoji select, call `updateList.mutate({ id: currentList.id, icon: selectedEmoji })`
-- The `todo_lists` table already has an `icon` column
+#### `src/components/PageEditor.tsx` (line ~408)
+- Same change: replace `<Input>` with auto-resizing `<textarea>`
+- Same styling approach
 
 ### Technical details
-- Import `EmojiPicker` from `./editor/EmojiPicker`
-- Remove `Pencil`, `Trash2` from lucide imports (Trash2 still used elsewhere — check; actually no, it's only used here, but delete functionality moves to TodoDetail or context menu — for now just remove from header)
-- The `isRenaming` / `renameValue` / `renameRef` state can be removed since the title is always an input now
+- Use a shared pattern: `onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}` for auto-resize
+- Handle Enter key to prevent newlines (blur or move focus to editor instead)
+- `focus-visible:ring-0 focus-visible:ring-offset-0 outline-none` removes all focus indicators
 
