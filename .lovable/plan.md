@@ -1,25 +1,38 @@
 
 
-## Plan: Fix todo/page title styling — remove outline, allow wrapping
+## Plan: Auto-create default space on new user signup
+
+When a new user signs up, automatically create a default space named after the username portion of their email (capitalized). E.g., `chattrn@gmail.com` → space "Chattrn".
+
+### Approach
+
+Extend the existing `handle_new_user()` database trigger function to also insert a row into `spaces` after creating the profile.
 
 ### Changes
 
-#### 1. Replace `<Input>` with `<textarea>` for both titles
-Both titles use `<Input>` (single-line `<input>`), which forces single-line display and shows a focus outline. Replace with auto-resizing `<textarea>` elements.
+#### 1. Update `handle_new_user()` trigger function (migration)
 
-#### `src/components/TodoListView.tsx` (line ~135)
-- Replace `<Input>` with a `<textarea>` that auto-resizes to content
-- Add `rows={1}`, `overflow-hidden`, `resize-none` to prevent scrollbar
-- Keep existing classes: `text-4xl font-bold bg-transparent border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 h-auto p-0`
-- Add `outline-none` to remove any remaining focus outline
-- Auto-resize on input via a small effect or `onInput` handler that sets `style.height`
+Add logic after the profile upsert to insert a default space:
 
-#### `src/components/PageEditor.tsx` (line ~408)
-- Same change: replace `<Input>` with auto-resizing `<textarea>`
-- Same styling approach
+```sql
+INSERT INTO public.spaces (user_id, name, icon)
+VALUES (
+  NEW.id,
+  initcap(split_part(NEW.email, '@', 1)),
+  '📘'
+)
+ON CONFLICT DO NOTHING;
+```
 
-### Technical details
-- Use a shared pattern: `onInput={(e) => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}` for auto-resize
-- Handle Enter key to prevent newlines (blur or move focus to editor instead)
-- `focus-visible:ring-0 focus-visible:ring-offset-0 outline-none` removes all focus indicators
+- `split_part(email, '@', 1)` extracts the username
+- `initcap()` capitalizes the first letter (e.g., "chattrn" → "Chattrn")
+- `ON CONFLICT DO NOTHING` prevents errors if the trigger fires multiple times
+
+#### 2. Auto-select the default space on first load
+
+In `src/pages/Index.tsx` (or wherever spaces are loaded and `selectedSpaceId` is initialized), if no space is selected and spaces exist, auto-select the first one. This likely already happens — will verify and ensure it does.
+
+### No other changes needed
+- Users can already rename spaces via the existing `SpaceSelector` / `useUpdateSpace`
+- The space is a normal space row, fully editable/deletable
 
